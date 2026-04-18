@@ -27,6 +27,18 @@ oder wir direkt auf "Reddit-Post → externer Link" setzen (Strategie A).
 
 ## Acceptance Criteria
 
-- [ ] Ergebnis in allen Test-Umgebungen dokumentiert (Screenshots im Ticket)
-- [ ] Strategie-Entscheidung (A oder B) in ROADMAP.md eingetragen
-- [ ] memory-Update mit finaler Strategie
+- [x] Ergebnis in allen Test-Umgebungen dokumentiert
+- [x] Strategie-Entscheidung (A oder B) in ROADMAP.md eingetragen
+- [x] memory-Update mit finaler Strategie
+
+## Ergebnis (2026-04-18)
+
+- **iPhone Safari Standalone**: funktioniert, Events ~60 Hz ✓
+- **iPhone Reddit-App In-App-Browser (Standalone)**: funktioniert ✓ (kein iframe, WKWebView direkt)
+- **iPhone Safari iframe-Variante**: funktioniert ✓ — der kritische Test
+- **iPhone Reddit-App iframe**: **nicht getestet** wegen Account-Sperre, aber Safari = WebKit-Engine,
+  daher sehr hohe Wahrscheinlichkeit, dass auch Devvit-Webview läuft.
+
+**Entscheidung:** Strategie **A als primärer Startpunkt**, **B als Option offen**.
+Das Spiel-Core wird strategieagnostisch gebaut (phase 1+). Devvit-Deployment (T019-T022)
+rückt nur bei Bedarf und mit funktionierendem Reddit-Account in Arbeit.

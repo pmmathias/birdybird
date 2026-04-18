@@ -4,16 +4,30 @@
 abgeleitet vom [VogelSimulator](https://github.com/pmmathias/VogelSimulator)
 aber als eigenständiges Mobile-First-Spiel. Primärer Distributionskanal: Reddit.
 
-## Strategie-Gabel (wird nach Phase 0 entschieden)
+## Strategie-Gabel (entschieden 2026-04-18)
+
+**Primär: Strategie A — Externer Link via GitHub Pages.**
+**Optional später: Strategie B — Devvit-Deployment.**
+
+Der iframe-Tilt-Test in iPhone Safari bestätigte: DeviceOrientation feuert
+zuverlässig im iframe → der WebKit-Bug greift nicht. Damit ist Devvit
+technisch offen, aber aktuelles Reddit-Account-Problem verschiebt B nach hinten.
 
 | | **Strategie A — Externer Link** | **Strategie B — Devvit-App** |
 |---|---|---|
 | Wo läuft das Spiel | GitHub Pages (birdybird) | In Reddit eingebettet (Devvit-Webview) |
 | Reddit-Rolle | Marketing-Kanal | Plattform |
-| Tilt-Risiko | bestätigt funktional ✓ | hängt von iframe-Test ab |
+| Tilt funktioniert | bestätigt ✓ | sehr wahrscheinlich ✓ (iframe-Test positiv) |
 | Backend | frei wählbar (Firebase/Supabase/CF) | Reddit Redis inklusive |
 | Leaderboard | eigenes Backend | native, pro Subreddit |
 | Entwicklung | Standard-Web | Devvit CLI, eigene Plattform-Regeln |
+| Braucht aktiven Reddit-Account | nur zum Cross-Posten | ja, für Entwicklung zwingend |
+
+**Konsequenz:** Game-Core in Phase 1-3 wird strategieagnostisch gebaut
+(reines Web, kein Devvit-Lock-in). Das Spiel läuft dann als externe URL
+und kann später — bei Bedarf und mit funktionierendem Reddit-Account —
+zusätzlich als Devvit-App deployt werden. Das Spiel bleibt ausserhalb
+Reddit verlinkbar (Twitter, ki-mathias.de, Discord etc.).
 
 ---
 
@@ -21,8 +35,8 @@ aber als eigenständiges Mobile-First-Spiel. Primärer Distributionskanal: Reddi
 
 | T | Titel | Status |
 |---|---|---|
-| T001 | iframe-Tilt-Test auswerten → Strategie A vs B festlegen | **backlog** |
-| T002 | Vite + Three.js Minimal-Setup im birdybird | backlog |
+| T001 | iframe-Tilt-Test auswerten → Strategie A vs B festlegen | **done ✓** |
+| T002 | Vite + Three.js Minimal-Setup im birdybird | backlog (next) |
 | T003 | Tilt-Steuerung + Smoothing + Kalibrierung | backlog |
 
 ## Phase 1 — MVP Game Core (~1-2 Wochen)
