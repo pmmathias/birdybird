@@ -15,6 +15,7 @@
     html, body {
       width: 100%; height: 100%; overflow: hidden;
       background: #0a1628;
+      color: #e0e8f0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       touch-action: none;
     }
@@ -27,12 +28,13 @@
     }
     .pill {
       padding: 7px 12px; border-radius: 999px;
-      background: rgba(10, 22, 40, 0.6);
+      background: rgba(10, 22, 40, 0.55);
       backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(96, 192, 255, 0.25);
       color: rgba(255, 255, 255, 0.85);
       font-size: 12px; font-weight: 600;
       pointer-events: auto;
+      font-variant-numeric: tabular-nums;
     }
     .pill .dot {
       display: inline-block;
@@ -41,12 +43,19 @@
       margin-right: 6px;
       vertical-align: middle;
     }
+    .pill .dot.ok { background: #44dd88; }
+
+    #hud {
+      position: fixed; top: max(env(safe-area-inset-top), 10px);
+      left: 50%; transform: translateX(-50%);
+      display: flex; gap: 6px; z-index: 100;
+      pointer-events: none;
+    }
+    #hud .pill { font-size: 11px; padding: 5px 10px; }
 
     #dev-links {
       position: fixed; bottom: max(env(safe-area-inset-bottom), 10px); left: 10px;
-      z-index: 100;
-      display: flex; gap: 6px;
-      font-size: 10px;
+      z-index: 100; display: flex; gap: 6px; font-size: 10px;
     }
     #dev-links a {
       padding: 4px 8px; border-radius: 6px;
@@ -54,18 +63,119 @@
       color: #60c0ff; text-decoration: none;
       border: 1px solid rgba(96, 192, 255, 0.2);
     }
+
+    #calibrate-btn {
+      position: fixed; bottom: max(env(safe-area-inset-bottom), 10px); right: 10px;
+      z-index: 100;
+      padding: 8px 14px; border-radius: 999px;
+      background: rgba(10, 22, 40, 0.7);
+      color: #60c0ff;
+      font-size: 12px; font-weight: 600;
+      border: 1px solid rgba(96, 192, 255, 0.3);
+      cursor: pointer;
+      display: none;
+    }
+    #calibrate-btn.visible { display: block; }
+    #calibrate-btn:active { transform: scale(0.96); }
+
+    /* Start overlay */
+    #start-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      background: linear-gradient(180deg, rgba(10,22,40,0.85), rgba(10,22,40,0.95));
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      transition: opacity 0.3s ease;
+    }
+    #start-overlay.hidden {
+      opacity: 0; pointer-events: none;
+    }
+    #start-card {
+      max-width: 360px; width: 100%;
+      background: rgba(20, 35, 60, 0.9);
+      border: 1px solid rgba(96, 192, 255, 0.3);
+      border-radius: 18px;
+      padding: 28px 22px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    #start-card h1 {
+      color: #ffaa44;
+      font-size: 26px;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+    #start-card .tag {
+      color: #7a8fa5;
+      font-size: 12px;
+      margin-bottom: 22px;
+      letter-spacing: 0.5px;
+    }
+    #start-card p {
+      color: #bbccdd;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .start-btn {
+      display: block; width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #2080cc, #40a0ff);
+      color: white;
+      font-size: 16px; font-weight: 700;
+      border: none; border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(32,128,204,0.4);
+      letter-spacing: 0.5px;
+    }
+    .start-btn:active { transform: scale(0.98); }
+    .start-btn.secondary {
+      background: transparent;
+      border: 1px solid rgba(96, 192, 255, 0.4);
+      color: #60c0ff;
+      font-weight: 600;
+      box-shadow: none;
+      margin-top: 10px;
+    }
+    #start-note {
+      margin-top: 14px;
+      font-size: 11px;
+      color: #506880;
+      min-height: 16px;
+    }
+    #start-note.err { color: #ff8866; }
   </style>
 </head>
 <body>
   <div id="topbar">
-    <div class="pill"><span class="dot"></span>birdybird · T002 scaffold</div>
+    <div class="pill"><span class="dot"></span>birdybird · T003 tilt</div>
     <div class="pill" id="fps">— fps</div>
   </div>
+
+  <div id="hud">
+    <div class="pill"><span id="hud-roll">roll —</span></div>
+    <div class="pill"><span id="hud-pitch">pitch —</span></div>
+  </div>
+
+  <button id="calibrate-btn">Recalibrate</button>
 
   <div id="dev-links">
     <a href="tilt-test.html">tilt-test</a>
     <a href="iframe-test.html">iframe-test</a>
     <a href="https://github.com/pmmathias/birdybird" target="_blank">github</a>
+  </div>
+
+  <div id="start-overlay">
+    <div id="start-card">
+      <h1>birdybird</h1>
+      <div class="tag">TILT TO FLY</div>
+      <p>Neige dein Handy, um zu steuern. Tippe auf den Button, erlaube den
+      Bewegungs-Zugriff, halte das Gerät dann so wie du es bequem findest —
+      das wird dein Nullpunkt.</p>
+      <button class="start-btn" id="start-btn">Tap to fly</button>
+      <button class="start-btn secondary" id="skip-btn">Desktop-Modus (Maus)</button>
+      <div id="start-note"></div>
+    </div>
   </div>
 
   <script type="module" src="/src/main.js"></script>
