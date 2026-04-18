@@ -89,11 +89,24 @@ let desktopMode = false;
 // --- UI wiring -----------------------------------------------------------
 
 const overlay = document.getElementById('start-overlay');
+const rotateOverlay = document.getElementById('rotate-overlay');
 const startBtn = document.getElementById('start-btn');
 const skipBtn = document.getElementById('skip-btn');
 const note = document.getElementById('start-note');
 const calibrateBtn = document.getElementById('calibrate-btn');
 const modePill = document.querySelector('#topbar .pill');
+
+let gameStarted = false;
+
+const isPortrait = () => window.innerHeight > window.innerWidth;
+
+const refreshRotatePrompt = () => {
+  const show = gameStarted && !desktopMode && isPortrait();
+  rotateOverlay.classList.toggle('visible', show);
+};
+
+window.addEventListener('resize', refreshRotatePrompt);
+window.addEventListener('orientationchange', refreshRotatePrompt);
 
 const setNote = (text, err) => {
   note.textContent = text;
@@ -103,6 +116,8 @@ const setNote = (text, err) => {
 const closeOverlay = () => {
   overlay.classList.add('hidden');
   setTimeout(() => { overlay.style.display = 'none'; }, 300);
+  gameStarted = true;
+  refreshRotatePrompt();
 };
 
 startBtn.addEventListener('click', async () => {

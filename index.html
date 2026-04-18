@@ -144,6 +144,28 @@
       min-height: 16px;
     }
     #start-note.err { color: #ff8866; }
+
+    /* Rotate-your-phone overlay */
+    #rotate-overlay {
+      position: fixed; inset: 0; z-index: 900;
+      background: rgba(10, 22, 40, 0.96);
+      display: none;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 20px;
+    }
+    #rotate-overlay.visible { display: flex; }
+    #rotate-card h2 { color: #ffaa44; font-size: 22px; margin: 14px 0 8px; }
+    #rotate-card p { color: #bbccdd; font-size: 13px; line-height: 1.5; }
+    #rotate-icon {
+      width: 80px; height: 80px;
+      margin: 0 auto 6px;
+      color: #60c0ff;
+      animation: rotate-wiggle 1.8s ease-in-out infinite;
+    }
+    @keyframes rotate-wiggle {
+      0%, 100% { transform: rotate(0deg); }
+      50%      { transform: rotate(-90deg); }
+    }
   </style>
 </head>
 <body>
@@ -163,6 +185,17 @@
     <a href="tilt-test.html">tilt-test</a>
     <a href="iframe-test.html">iframe-test</a>
     <a href="https://github.com/pmmathias/birdybird" target="_blank">github</a>
+  </div>
+
+  <div id="rotate-overlay">
+    <div id="rotate-card">
+      <svg id="rotate-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="7" y="2" width="10" height="20" rx="2" />
+        <line x1="11" y1="18" x2="13" y2="18" />
+      </svg>
+      <h2>Drehe dein Handy</h2>
+      <p>birdybird wird im Querformat geflogen.</p>
+    </div>
   </div>
 
   <div id="start-overlay">

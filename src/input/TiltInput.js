@@ -134,12 +134,54 @@ export class TiltInput {
 
   _attach() {
     window.addEventListener('deviceorientation', this._onOrientation);
+    window.addEventListener('orientationchange', this._onOrientationChange);
+    if (screen.orientation && screen.orientation.addEventListener) {
+      screen.orientation.addEventListener('change', this._onOrientationChange);
+    }
     this._autoCalibrateOnNext = true;
   }
 
+  _getScreenAngle() {
+    if (screen.orientation && typeof screen.orientation.angle === 'number') {
+      return screen.orientation.angle;
+    }
+    // Safari fallback on older iOS
+    return typeof window.orientation === 'number' ? window.orientation : 0;
+  }
+
+  _onOrientationChange = () => {
+    // Orientation swap invalidates the calibration zero — re-calibrate on next event
+    this._autoCalibrateOnNext = true;
+  };
+
   _onOrientation(e) {
-    this._rawBeta = e.beta ?? 0;
-    this._rawGamma = e.gamma ?? 0;
+    const beta = e.beta ?? 0;
+    const gamma = e.gamma ?? 0;
+    const angle = this._getScreenAngle();
+
+    // Remap raw sensor axes (device frame) to a consistent pitch/roll (screen frame).
+    // In portrait: pitch = beta (front/back), roll = gamma (left/right).
+    // When the user rotates to landscape, beta/gamma swap roles — compensate here.
+    switch (angle) {
+      case 90:   // landscape, top edge to the right
+        this._rawBeta = -gamma;
+        this._rawGamma = beta;
+        break;
+      case -90:
+      case 270:  // landscape, top edge to the left
+        this._rawBeta = gamma;
+        this._rawGamma = -beta;
+        break;
+      case 180:  // portrait upside-down
+        this._rawBeta = -beta;
+        this._rawGamma = -gamma;
+        break;
+      default:   // portrait (0)
+        this._rawBeta = beta;
+        this._rawGamma = gamma;
+        break;
+    }
+
     this._eventCount++;
     this._lastEventAt = performance.now();
 
