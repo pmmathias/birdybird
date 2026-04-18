@@ -1,8 +1,10 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TiltInput, TILT_STATE } from './input/TiltInput.js';
+import { FlightState } from './flight/FlightState.js';
+import { FlightPhysics } from './flight/FlightPhysics.js';
+import { CameraRig } from './flight/CameraRig.js';
 
-// --- Three.js scene ------------------------------------------------------
+// --- Renderer / scene ----------------------------------------------------
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -12,74 +14,79 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 150, 600);
+scene.fog = new THREE.Fog(0x87ceeb, 150, 700);
 
-const camera = new THREE.PerspectiveCamera(
-  60,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1500
-);
-camera.position.set(20, 18, 30);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 const sun = new THREE.DirectionalLight(0xffffff, 1.1);
 sun.position.set(80, 120, 60);
 scene.add(sun);
 
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(800, 800),
+  new THREE.PlaneGeometry(2000, 2000),
   new THREE.MeshStandardMaterial({ color: 0x4a7c3a, roughness: 0.9 })
 );
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-for (let i = 0; i < 40; i++) {
+for (let i = 0; i < 120; i++) {
   const tree = new THREE.Mesh(
-    new THREE.ConeGeometry(1.5 + Math.random() * 1.5, 5 + Math.random() * 4, 6),
+    new THREE.ConeGeometry(1.5 + Math.random() * 1.5, 5 + Math.random() * 5, 6),
     new THREE.MeshStandardMaterial({ color: 0x2d5a27 })
   );
-  tree.position.set((Math.random() - 0.5) * 400, 3, (Math.random() - 0.5) * 400);
+  tree.position.set((Math.random() - 0.5) * 1200, 3, (Math.random() - 0.5) * 1200);
   scene.add(tree);
 }
 
-const birdGroup = new THREE.Group();
+// Reference marker at origin so we don't feel lost in a blank world
+const marker = new THREE.Mesh(
+  new THREE.CylinderGeometry(2, 2, 40, 12),
+  new THREE.MeshStandardMaterial({ color: 0xff4444 })
+);
+marker.position.set(0, 20, 200);
+scene.add(marker);
+
+// --- Bird ---------------------------------------------------------------
+
+const bird = new THREE.Group();
+bird.rotation.order = 'YXZ';
+
 const birdBody = new THREE.Mesh(
   new THREE.ConeGeometry(0.6, 2.5, 8),
   new THREE.MeshStandardMaterial({ color: 0xffaa44, roughness: 0.6 })
 );
-birdBody.rotation.x = Math.PI / 2;
-birdGroup.add(birdBody);
+birdBody.rotation.x = -Math.PI / 2;
+bird.add(birdBody);
 
 const wingL = new THREE.Mesh(
   new THREE.BoxGeometry(2.5, 0.1, 0.8),
   new THREE.MeshStandardMaterial({ color: 0xcc7733 })
 );
 wingL.position.set(-1.4, 0, 0);
-birdGroup.add(wingL);
+bird.add(wingL);
 
 const wingR = wingL.clone();
 wingR.position.x = 1.4;
-birdGroup.add(wingR);
+bird.add(wingR);
 
-birdGroup.position.set(0, 15, 0);
-scene.add(birdGroup);
+scene.add(bird);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.copy(birdGroup.position);
-controls.enableDamping = true;
-controls.minDistance = 10;
-controls.maxDistance = 200;
+// --- Flight --------------------------------------------------------------
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+const state = new FlightState();
+const phys = new FlightPhysics(state);
+const cam = new CameraRig(camera);
 
-// --- Tilt input + start overlay ------------------------------------------
+bird.position.copy(state.position);
+cam.snap(state);
+
+// --- Input state ---------------------------------------------------------
 
 const tilt = new TiltInput();
+let desktopMode = false;
+
+// --- UI wiring -----------------------------------------------------------
 
 const overlay = document.getElementById('start-overlay');
 const startBtn = document.getElementById('start-btn');
@@ -87,36 +94,31 @@ const skipBtn = document.getElementById('skip-btn');
 const note = document.getElementById('start-note');
 const calibrateBtn = document.getElementById('calibrate-btn');
 const modePill = document.querySelector('#topbar .pill');
-const modeDot = modePill.querySelector('.dot');
 
-function setNote(text, isError = false) {
+const setNote = (text, err) => {
   note.textContent = text;
-  note.classList.toggle('err', !!isError);
-}
+  note.classList.toggle('err', !!err);
+};
 
-function closeOverlay() {
+const closeOverlay = () => {
   overlay.classList.add('hidden');
   setTimeout(() => { overlay.style.display = 'none'; }, 300);
-}
+};
 
 startBtn.addEventListener('click', async () => {
   if (tilt.state === TILT_STATE.UNSUPPORTED) {
-    setNote('Dieses Gerät hat keinen Gyroskop-Sensor. Nutze Desktop-Modus.', true);
+    setNote('Dieses Gerät hat keinen Gyro-Sensor. Nutze Desktop-Modus.', true);
     return;
   }
   setNote('Permission angefragt...');
   const result = await tilt.requestPermission();
-
   if (result === TILT_STATE.GRANTED) {
-    setTimeout(() => {
-      if (tilt.eventCount === 0) {
-        setNote('Permission erteilt, aber keine Events. Neigen funktioniert nicht?', true);
-      }
-    }, 1500);
-    modeDot.classList.add('ok');
     modePill.innerHTML = '<span class="dot ok"></span>tilt · live';
     calibrateBtn.classList.add('visible');
     closeOverlay();
+    setTimeout(() => {
+      if (tilt.eventCount === 0) setNote('Permission ok, aber keine Events?', true);
+    }, 1500);
   } else if (result === TILT_STATE.DENIED) {
     setNote('Permission abgelehnt. Neu laden oder Desktop-Modus.', true);
   } else if (result === TILT_STATE.ERROR) {
@@ -125,21 +127,50 @@ startBtn.addEventListener('click', async () => {
 });
 
 skipBtn.addEventListener('click', () => {
-  modePill.innerHTML = '<span class="dot"></span>desktop · maus-drag';
+  desktopMode = true;
+  modePill.innerHTML = '<span class="dot"></span>desktop · W/S A/D · space flap';
   closeOverlay();
 });
 
 calibrateBtn.addEventListener('click', () => {
   tilt.calibrate();
   calibrateBtn.textContent = 'Calibrated ✓';
-  setTimeout(() => { calibrateBtn.textContent = 'Recalibrate'; }, 1200);
+  setTimeout(() => { calibrateBtn.textContent = 'Recalibrate'; }, 1000);
+});
+
+// --- Tap-to-Flap ---------------------------------------------------------
+
+renderer.domElement.addEventListener('pointerdown', () => {
+  phys.flap(1.0);
+});
+
+// --- Desktop keyboard fallback -------------------------------------------
+
+const keys = { w: 0, s: 0, a: 0, d: 0, space: 0 };
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyW') keys.w = 1;
+  if (e.code === 'KeyS') keys.s = 1;
+  if (e.code === 'KeyA') keys.a = 1;
+  if (e.code === 'KeyD') keys.d = 1;
+  if (e.code === 'Space') { keys.space = 1; phys.flap(1.0); }
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'KeyW') keys.w = 0;
+  if (e.code === 'KeyS') keys.s = 0;
+  if (e.code === 'KeyA') keys.a = 0;
+  if (e.code === 'KeyD') keys.d = 0;
+  if (e.code === 'Space') keys.space = 0;
+});
+
+// --- Resize --------------------------------------------------------------
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // --- Animate -------------------------------------------------------------
-
-const MAX_BANK = Math.PI / 4;   // 45°
-const MAX_PITCH = Math.PI / 6;  // 30°
-const ROTATION_LERP = 0.18;
 
 const hudRoll = document.getElementById('hud-roll');
 const hudPitch = document.getElementById('hud-pitch');
@@ -147,51 +178,61 @@ const fpsEl = document.getElementById('fps');
 
 let lastFpsUpdate = performance.now();
 let frames = 0;
-let targetRoll = 0;
-let targetPitch = 0;
-let currentRoll = 0;
-let currentPitch = 0;
 
 const clock = new THREE.Clock();
+const MAX_DT = 0.066; // clamp to avoid big jumps after tab switch
 
 function animate() {
   requestAnimationFrame(animate);
-  const t = clock.getElapsedTime();
+
+  const dt = Math.min(clock.getDelta(), MAX_DT);
+
+  // --- Input to physics ---
+  let rollInput = 0;
+  let pitchInput = 0;
 
   tilt.update();
 
   if (tilt.active) {
-    targetRoll = -tilt.roll * MAX_BANK;
-    targetPitch = tilt.pitch * MAX_PITCH;
-  } else {
-    targetRoll = 0;
-    targetPitch = 0;
+    rollInput = tilt.roll;
+    pitchInput = tilt.pitch;
+  } else if (desktopMode) {
+    rollInput = (keys.d - keys.a);
+    pitchInput = (keys.s - keys.w);
   }
 
-  currentRoll += (targetRoll - currentRoll) * ROTATION_LERP;
-  currentPitch += (targetPitch - currentPitch) * ROTATION_LERP;
+  phys.applyRoll(rollInput, dt);
+  phys.applyPitch(pitchInput, dt);
+  phys.update(dt);
 
-  birdGroup.rotation.z = currentRoll;
-  birdGroup.rotation.x = currentPitch;
+  // --- Bird visual ---
+  bird.position.copy(state.position);
+  bird.rotation.set(state.pitch, state.yaw, state.roll);
 
-  birdGroup.position.y = 15 + Math.sin(t * 1.5) * 1.2;
-  const flap = Math.sin(t * 8) * 0.3;
+  // Wing flap animation — more pronounced during active flap phase
+  const flapIntensity = state.flapPhase > 0 ? 1.0 : 0.3;
+  const flap = Math.sin(clock.elapsedTime * (state.flapPhase > 0 ? 20 : 5)) * 0.25 * flapIntensity;
   wingL.rotation.z = flap;
   wingR.rotation.z = -flap;
 
-  if (hudRoll && hudPitch) {
-    hudRoll.textContent = 'roll ' + (tilt.roll * 100 | 0).toString().padStart(4, ' ');
-    hudPitch.textContent = 'pitch ' + (tilt.pitch * 100 | 0).toString().padStart(4, ' ');
+  // --- Camera ---
+  cam.update(state);
+
+  // --- HUD ---
+  if (hudRoll) {
+    hudRoll.textContent = 'roll ' + ((rollInput * 100) | 0).toString().padStart(4, ' ');
+  }
+  if (hudPitch) {
+    hudPitch.textContent = 'pitch ' + ((pitchInput * 100) | 0).toString().padStart(4, ' ');
   }
 
-  controls.update();
   renderer.render(scene, camera);
 
   frames++;
   const now = performance.now();
   if (now - lastFpsUpdate > 500) {
     const fps = (frames * 1000) / (now - lastFpsUpdate);
-    if (fpsEl) fpsEl.textContent = fps.toFixed(0) + ' fps';
+    if (fpsEl) fpsEl.textContent = `${fps.toFixed(0)}fps · ${state.speed.toFixed(0)}m/s · ${state.altitude.toFixed(0)}m`;
     frames = 0;
     lastFpsUpdate = now;
   }
