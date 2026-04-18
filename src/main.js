@@ -56,7 +56,9 @@ const birdBody = new THREE.Mesh(
   new THREE.ConeGeometry(0.6, 2.5, 8),
   new THREE.MeshStandardMaterial({ color: 0xffaa44, roughness: 0.6 })
 );
-birdBody.rotation.x = -Math.PI / 2;
+// Cone default tip = +Y. Rotate +π/2 around X → tip points to -Z (default bird forward).
+// state.yaw = π then rotates the group 180° around Y so bird visually faces +Z = flight direction.
+birdBody.rotation.x = Math.PI / 2;
 bird.add(birdBody);
 
 const wingL = new THREE.Mesh(
