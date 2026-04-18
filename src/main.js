@@ -194,7 +194,7 @@ function animate() {
   tilt.update();
 
   if (tilt.active) {
-    rollInput = tilt.roll;
+    rollInput = -tilt.roll;
     pitchInput = tilt.pitch;
   } else if (desktopMode) {
     rollInput = (keys.d - keys.a);
