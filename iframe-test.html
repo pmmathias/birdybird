@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <title>Iframe-Tilt-Test — birdybird</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #0a1628; color: #e0e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+    body {
+      display: flex; flex-direction: column;
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
+    }
+    header {
+      padding: 14px;
+      background: rgba(255,170,68,0.1);
+      border-bottom: 1px solid rgba(255,170,68,0.3);
+    }
+    h1 {
+      font-size: 15px; color: #ffaa44; margin-bottom: 4px;
+    }
+    .sub {
+      font-size: 11px; color: #c9b896; line-height: 1.5;
+    }
+    iframe {
+      flex: 1;
+      width: 100%;
+      border: none;
+      background: #0a1628;
+    }
+    .foot {
+      padding: 8px 14px;
+      background: rgba(255,255,255,0.03);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      font-size: 10px;
+      color: #506880;
+      text-align: center;
+    }
+    .foot a { color: #60c0ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Iframe-Test</h1>
+    <div class="sub">
+      Der eigentliche Tilt-Test läuft unten in einem <b>iframe</b> mit <code>allow="gyroscope; accelerometer"</code>.
+      Wenn hier drin das Environment-Feld "In iframe: <b>JA</b>" zeigt und die Tilt-Werte trotzdem live sind,
+      ist Devvit höchstwahrscheinlich machbar.
+    </div>
+  </header>
+
+  <iframe
+    src="./index.html"
+    allow="gyroscope; accelerometer; magnetometer"
+    sandbox="allow-scripts allow-same-origin">
+  </iframe>
+
+  <div class="foot">
+    <a href="./index.html">← Standalone-Test</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/pmmathias/birdybird">Repo</a>
+  </div>
+</body>
+</html>
