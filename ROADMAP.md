@@ -37,7 +37,7 @@ Reddit verlinkbar (Twitter, ki-mathias.de, Discord etc.).
 |---|---|---|
 | T001 | iframe-Tilt-Test auswerten → Strategie A vs B festlegen | **done ✓** |
 | T002 | Vite + Three.js Minimal-Setup im birdybird | **done ✓** |
-| T003 | Tilt-Steuerung + Smoothing + Kalibrierung | backlog (next) |
+| T003 | Tilt-Steuerung + Smoothing + Kalibrierung | **done ✓** |
 
 ## Phase 1 — MVP Game Core (~1-2 Wochen)
 

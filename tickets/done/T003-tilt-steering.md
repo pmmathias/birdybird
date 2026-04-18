@@ -32,8 +32,22 @@ in saubere Roll/Pitch-Werte für das Flugmodell umwandelt.
 
 ## Acceptance Criteria
 
-- [ ] `TiltInput.js` als ES-Modul
-- [ ] Permission-Button wird korrekt angezeigt auf iOS 13+
-- [ ] Demo-Seite mit sichtbarem Bird-Avatar der sauber auf Tilt reagiert
-- [ ] Kalibrierung funktioniert (Handy in beliebiger Haltung aktivieren)
-- [ ] Keine spürbaren Ruckler bei normalem Handling
+- [x] `TiltInput.js` als ES-Modul
+- [x] Permission-Button wird korrekt angezeigt auf iOS 13+
+- [x] Demo-Seite mit sichtbarem Bird-Avatar der sauber auf Tilt reagiert
+- [x] Kalibrierung funktioniert (Handy in beliebiger Haltung aktivieren)
+- [x] Keine spürbaren Ruckler bei normalem Handling
+
+## Out of scope (verschoben)
+
+- Virtual-Joystick Touch-Fallback für Geräte ohne Gyro — kommt falls nötig
+  als eigenes Ticket in Phase 1+ (aktuell hat das Overlay stattdessen einen
+  "Desktop-Modus"-Button mit OrbitControls-Fallback)
+
+## Ergebnis (2026-04-18)
+
+Auf iPhone Safari bestätigt: Permission-Dialog kommt, Events liefern
+zuverlässig roll/pitch, Smoothing + Dead-Zone fühlen sich okay an,
+Recalibrate funktioniert. Tuning-Werte sitzen in `TiltInput.js` constructor
+und sind später bei Bedarf leicht anzupassen (smoothing 0.2, deadzone 3°,
+maxRoll 45°, maxPitch 30°).
