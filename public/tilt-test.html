@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <title>Tilt Test — VogelSim</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #0a1628;
+      color: #e0e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex; flex-direction: column;
+      padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom) 14px;
+      padding-top: max(env(safe-area-inset-top), 12px);
+    }
+
+    h1 {
+      font-size: 18px; font-weight: 600; color: #60c0ff;
+      margin-bottom: 4px; letter-spacing: 0.3px;
+    }
+    .sub { font-size: 12px; color: #7a8fa5; margin-bottom: 14px; }
+
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(96,192,255,0.15);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+    .card h2 {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+      text-transform: uppercase; color: #ffaa44;
+      margin-bottom: 8px;
+    }
+
+    .row { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; font-size: 13px; }
+    .row .k { color: #7a8fa5; }
+    .row .v { color: #fff; font-weight: 600; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; }
+    .v.ok { color: #44dd88; }
+    .v.bad { color: #ff6666; }
+    .v.warn { color: #ffaa44; }
+
+    /* Big tilt readout */
+    .big-row { display: flex; gap: 8px; margin: 4px 0 2px; }
+    .big {
+      flex: 1;
+      background: rgba(96,192,255,0.08);
+      border: 1px solid rgba(96,192,255,0.25);
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+    .big .label { font-size: 10px; color: #7a8fa5; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+    .big .val { font-size: 26px; font-weight: 700; font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: #fff; line-height: 1.1; }
+    .big .hint { font-size: 9px; color: #60c0ff; margin-top: 2px; }
+
+    /* Visual bird indicator */
+    .viz {
+      position: relative;
+      height: 120px;
+      background: linear-gradient(180deg, rgba(96,192,255,0.1), rgba(96,192,255,0.02));
+      border: 1px solid rgba(96,192,255,0.2);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .horizon {
+      position: absolute; left: 0; right: 0; top: 50%;
+      height: 1px; background: rgba(255,255,255,0.15);
+    }
+    .center-dot {
+      position: absolute; left: 50%; top: 50%;
+      width: 4px; height: 4px; border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      transform: translate(-50%, -50%);
+    }
+    .bird {
+      position: absolute; left: 50%; top: 50%;
+      width: 80px; height: 36px;
+      transform-origin: center;
+      transition: transform 0.05s linear;
+      pointer-events: none;
+    }
+    .bird svg { width: 100%; height: 100%; display: block; }
+
+    /* Buttons */
+    .btn {
+      display: block; width: 100%;
+      padding: 14px; margin-top: 8px;
+      background: linear-gradient(135deg, #2080cc, #40a0ff);
+      color: white;
+      font-size: 15px; font-weight: 600;
+      border: none; border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(32,128,204,0.35);
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn.secondary {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(96,192,255,0.3);
+      box-shadow: none;
+    }
+    .btn[disabled] { opacity: 0.4; pointer-events: none; }
+
+    /* Tap-to-Flap area */
+    .flap-area {
+      background: rgba(255,170,68,0.08);
+      border: 1px dashed rgba(255,170,68,0.4);
+      border-radius: 12px;
+      padding: 14px; text-align: center;
+      margin-top: 8px;
+      user-select: none; -webkit-user-select: none;
+    }
+    .flap-area.pulse {
+      background: rgba(255,170,68,0.25);
+      transition: background 0.15s;
+    }
+    .flap-label { font-size: 11px; color: #ffaa44; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 4px; }
+    .flap-count { font-size: 28px; font-weight: 700; color: #fff; font-family: ui-monospace, monospace; }
+
+    .footer {
+      margin-top: auto;
+      padding-top: 10px;
+      font-size: 10px;
+      color: #506880;
+      text-align: center;
+      line-height: 1.5;
+    }
+    .footer a { color: #60c0ff; text-decoration: none; }
+
+    /* Status pill */
+    #status {
+      display: inline-block;
+      padding: 3px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 600;
+      background: rgba(255,170,68,0.15);
+      color: #ffaa44;
+      border: 1px solid rgba(255,170,68,0.3);
+      margin-left: 6px;
+    }
+    #status.ok { background: rgba(68,221,136,0.15); color: #44dd88; border-color: rgba(68,221,136,0.3); }
+    #status.bad { background: rgba(255,102,102,0.15); color: #ff6666; border-color: rgba(255,102,102,0.3); }
+  </style>
+</head>
+<body>
+  <h1>Tilt-Test <span id="status">idle</span></h1>
+  <div class="sub">Neige das Handy — so wird sich VogelSim mobil steuern lassen.</div>
+
+  <!-- Big live values -->
+  <div class="big-row">
+    <div class="big">
+      <div class="label">Roll (γ)</div>
+      <div class="val" id="gamma">—</div>
+      <div class="hint">links / rechts</div>
+    </div>
+    <div class="big">
+      <div class="label">Pitch (β)</div>
+      <div class="val" id="beta">—</div>
+      <div class="hint">vor / zurück</div>
+    </div>
+  </div>
+
+  <!-- Visual bird -->
+  <div class="viz">
+    <div class="horizon"></div>
+    <div class="center-dot"></div>
+    <div class="bird" id="bird">
+      <svg viewBox="0 0 80 36" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10 18 L30 10 L40 18 L50 10 L70 18 L50 22 L40 18 L30 22 Z"
+              fill="#ffaa44" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/>
+        <circle cx="40" cy="18" r="3" fill="#0a1628"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Permission / Environment -->
+  <div class="card">
+    <h2>Environment</h2>
+    <div class="row"><span class="k">DeviceOrientationEvent</span><span class="v" id="env-doe">…</span></div>
+    <div class="row"><span class="k">requestPermission API</span><span class="v" id="env-req">…</span></div>
+    <div class="row"><span class="k">Secure context (HTTPS)</span><span class="v" id="env-sec">…</span></div>
+    <div class="row"><span class="k">In iframe</span><span class="v" id="env-frame">…</span></div>
+    <div class="row"><span class="k">Events empfangen</span><span class="v" id="env-events">0</span></div>
+    <div class="row"><span class="k">Update-Rate</span><span class="v" id="env-hz">— Hz</span></div>
+  </div>
+
+  <!-- Start button (required for iOS 13+ permission) -->
+  <button class="btn" id="start-btn">Tilt aktivieren (erfordert Permission)</button>
+
+  <!-- Tap-to-Flap test -->
+  <div class="flap-area" id="flap-area">
+    <div class="flap-label">Tap-to-Flap Test</div>
+    <div class="flap-count" id="flap-count">0</div>
+  </div>
+
+  <div class="footer">
+    Teste auf: Safari · Reddit-App (Post mit Link → tappen) · Chrome Android<br>
+    <a href="https://github.com/pmmathias/VogelSimulator">github.com/pmmathias/VogelSimulator</a>
+  </div>
+
+  <script>
+    // --- Environment detection ---
+    const hasDOE = typeof DeviceOrientationEvent !== 'undefined';
+    const hasReq = hasDOE && typeof DeviceOrientationEvent.requestPermission === 'function';
+    const secure = window.isSecureContext;
+    const inFrame = window.self !== window.top;
+
+    function setVal(id, text, cls) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.classList.remove('ok', 'bad', 'warn');
+      if (cls) el.classList.add(cls);
+    }
+
+    setVal('env-doe', hasDOE ? 'ja' : 'NEIN', hasDOE ? 'ok' : 'bad');
+    setVal('env-req', hasReq ? 'ja (iOS 13+)' : 'nein (Android/Desktop)', hasReq ? 'warn' : 'ok');
+    setVal('env-sec', secure ? 'ja' : 'NEIN', secure ? 'ok' : 'bad');
+    setVal('env-frame', inFrame ? 'JA — in iframe!' : 'nein', inFrame ? 'warn' : 'ok');
+
+    // --- Status pill ---
+    const statusEl = document.getElementById('status');
+    function setStatus(txt, cls) {
+      statusEl.textContent = txt;
+      statusEl.className = cls || '';
+    }
+
+    // --- Orientation handler ---
+    let eventCount = 0;
+    let lastHzTick = performance.now();
+    let hzCount = 0;
+    let latestBeta = 0;
+    let latestGamma = 0;
+
+    function onOrientation(e) {
+      eventCount++;
+      hzCount++;
+      latestBeta = e.beta || 0;
+      latestGamma = e.gamma || 0;
+
+      document.getElementById('beta').textContent = e.beta != null ? e.beta.toFixed(1) + '°' : 'null';
+      document.getElementById('gamma').textContent = e.gamma != null ? e.gamma.toFixed(1) + '°' : 'null';
+      document.getElementById('env-events').textContent = eventCount;
+
+      // Rotate bird: roll = gamma (banking), pitch = beta (nose)
+      const roll = Math.max(-60, Math.min(60, latestGamma));
+      const pitch = Math.max(-30, Math.min(30, latestBeta - 45));
+      const bird = document.getElementById('bird');
+      bird.style.transform = `translate(-50%, -50%) rotate(${roll}deg) translateY(${pitch * 0.8}px)`;
+
+      if (eventCount === 1) setStatus('live', 'ok');
+    }
+
+    // Measure update rate
+    setInterval(() => {
+      const now = performance.now();
+      const dt = (now - lastHzTick) / 1000;
+      const hz = hzCount / dt;
+      document.getElementById('env-hz').textContent = hz > 0 ? hz.toFixed(0) + ' Hz' : '0 Hz (stuck)';
+      document.getElementById('env-hz').classList.toggle('ok', hz >= 20);
+      document.getElementById('env-hz').classList.toggle('bad', hz === 0 && eventCount > 0);
+      lastHzTick = now;
+      hzCount = 0;
+    }, 1500);
+
+    // --- Start button: request permission on iOS, attach listener otherwise ---
+    const startBtn = document.getElementById('start-btn');
+    startBtn.addEventListener('click', async () => {
+      if (!hasDOE) {
+        setStatus('not supported', 'bad');
+        alert('DeviceOrientationEvent wird auf diesem Gerät nicht unterstützt.');
+        return;
+      }
+      if (hasReq) {
+        try {
+          const state = await DeviceOrientationEvent.requestPermission();
+          if (state === 'granted') {
+            window.addEventListener('deviceorientation', onOrientation);
+            startBtn.textContent = 'Tilt aktiv — neige das Handy';
+            startBtn.classList.add('secondary');
+            setStatus('granted', 'ok');
+          } else {
+            setStatus('denied', 'bad');
+            startBtn.textContent = 'Permission abgelehnt — Seite neu laden';
+          }
+        } catch (err) {
+          setStatus('error', 'bad');
+          startBtn.textContent = 'Fehler: ' + (err.message || err);
+        }
+      } else {
+        // Android / Desktop — no permission needed
+        window.addEventListener('deviceorientation', onOrientation);
+        startBtn.textContent = 'Tilt aktiv — neige das Handy';
+        startBtn.classList.add('secondary');
+        setStatus('listening', 'ok');
+      }
+    });
+
+    // --- Tap-to-Flap ---
+    let flapCount = 0;
+    const flapArea = document.getElementById('flap-area');
+    const flapCountEl = document.getElementById('flap-count');
+    function flap() {
+      flapCount++;
+      flapCountEl.textContent = flapCount;
+      flapArea.classList.add('pulse');
+      setTimeout(() => flapArea.classList.remove('pulse'), 120);
+    }
+    flapArea.addEventListener('touchstart', (e) => { e.preventDefault(); flap(); }, { passive: false });
+    flapArea.addEventListener('mousedown', flap);
+
+    // --- Timeout warning: if 3s after click no events, flag it ---
+    startBtn.addEventListener('click', () => {
+      setTimeout(() => {
+        if (eventCount === 0 && statusEl.textContent !== 'denied' && statusEl.textContent !== 'error') {
+          setStatus('no events!', 'bad');
+          document.getElementById('env-hz').textContent = '0 Hz (keine Events)';
+          document.getElementById('env-hz').classList.add('bad');
+        }
+      }, 3000);
+    });
+  </script>
+</body>
+</html>
