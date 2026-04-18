@@ -158,19 +158,23 @@ export class TiltInput {
     const beta = e.beta ?? 0;
     const gamma = e.gamma ?? 0;
     const angle = this._getScreenAngle();
+    this._screenAngle = angle;
+    this._sensorBeta = beta;
+    this._sensorGamma = gamma;
 
     // Remap raw sensor axes (device frame) to a consistent pitch/roll (screen frame).
-    // In portrait: pitch = beta (front/back), roll = gamma (left/right).
-    // When the user rotates to landscape, beta/gamma swap roles — compensate here.
+    // _rawBeta → used as pitch source, _rawGamma → used as roll source.
+    // In portrait, beta = front/back tilt, gamma = left/right tilt.
+    // In landscape, these swap roles.
     switch (angle) {
-      case 90:   // landscape, top edge to the right
-        this._rawBeta = -gamma;
-        this._rawGamma = beta;
-        break;
-      case -90:
-      case 270:  // landscape, top edge to the left
+      case 90:   // landscape, top-of-device to the right
         this._rawBeta = gamma;
         this._rawGamma = -beta;
+        break;
+      case -90:
+      case 270:  // landscape, top-of-device to the left
+        this._rawBeta = -gamma;
+        this._rawGamma = beta;
         break;
       case 180:  // portrait upside-down
         this._rawBeta = -beta;
@@ -189,5 +193,18 @@ export class TiltInput {
       this.calibrate();
       this._autoCalibrateOnNext = false;
     }
+  }
+
+  /** Live-Debug-Info for on-screen HUD. */
+  get debug() {
+    return {
+      angle: this._screenAngle ?? 0,
+      sensorBeta: this._sensorBeta ?? 0,
+      sensorGamma: this._sensorGamma ?? 0,
+      remappedBeta: this._rawBeta,
+      remappedGamma: this._rawGamma,
+      calBeta: this._calibratedBeta,
+      calGamma: this._calibratedGamma,
+    };
   }
 }

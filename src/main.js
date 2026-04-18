@@ -191,6 +191,14 @@ const hudRoll = document.getElementById('hud-roll');
 const hudPitch = document.getElementById('hud-pitch');
 const fpsEl = document.getElementById('fps');
 
+const dbgAngle = document.getElementById('dbg-angle');
+const dbgSb = document.getElementById('dbg-sb');
+const dbgSg = document.getElementById('dbg-sg');
+const dbgRb = document.getElementById('dbg-rb');
+const dbgRg = document.getElementById('dbg-rg');
+const dbgR = document.getElementById('dbg-r');
+const dbgP = document.getElementById('dbg-p');
+
 let lastFpsUpdate = performance.now();
 let frames = 0;
 
@@ -209,7 +217,7 @@ function animate() {
   tilt.update();
 
   if (tilt.active) {
-    rollInput = -tilt.roll;
+    rollInput = tilt.roll;
     pitchInput = tilt.pitch;
   } else if (desktopMode) {
     rollInput = (keys.d - keys.a);
@@ -240,6 +248,15 @@ function animate() {
   if (hudPitch) {
     hudPitch.textContent = 'pitch ' + ((pitchInput * 100) | 0).toString().padStart(4, ' ');
   }
+
+  const d = tilt.debug;
+  if (dbgAngle) dbgAngle.textContent = d.angle;
+  if (dbgSb) dbgSb.textContent = d.sensorBeta.toFixed(0);
+  if (dbgSg) dbgSg.textContent = d.sensorGamma.toFixed(0);
+  if (dbgRb) dbgRb.textContent = d.remappedBeta.toFixed(0);
+  if (dbgRg) dbgRg.textContent = d.remappedGamma.toFixed(0);
+  if (dbgR) dbgR.textContent = (tilt.roll * 100 | 0);
+  if (dbgP) dbgP.textContent = (tilt.pitch * 100 | 0);
 
   renderer.render(scene, camera);
 

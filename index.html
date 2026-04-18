@@ -53,6 +53,21 @@
     }
     #hud .pill { font-size: 11px; padding: 5px 10px; }
 
+    #debug-panel {
+      position: fixed; top: 50%; right: 10px; transform: translateY(-50%);
+      z-index: 100; pointer-events: none;
+      background: rgba(10, 22, 40, 0.7);
+      border: 1px solid rgba(96, 192, 255, 0.25);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 10px;
+      line-height: 1.5;
+      color: #aaccdd;
+      font-variant-numeric: tabular-nums;
+    }
+    #debug-panel span { color: #ffaa44; font-weight: 600; display: inline-block; min-width: 32px; text-align: right; margin-left: 2px; }
+
     #dev-links {
       position: fixed; bottom: max(env(safe-area-inset-bottom), 10px); left: 10px;
       z-index: 100; display: flex; gap: 6px; font-size: 10px;
@@ -177,6 +192,13 @@
   <div id="hud">
     <div class="pill"><span id="hud-roll">roll —</span></div>
     <div class="pill"><span id="hud-pitch">pitch —</span></div>
+  </div>
+
+  <div id="debug-panel">
+    <div>ang <span id="dbg-angle">—</span></div>
+    <div>sens β<span id="dbg-sb">—</span> γ<span id="dbg-sg">—</span></div>
+    <div>remap β<span id="dbg-rb">—</span> γ<span id="dbg-rg">—</span></div>
+    <div>out roll<span id="dbg-r">—</span> pitch<span id="dbg-p">—</span></div>
   </div>
 
   <button id="calibrate-btn">Recalibrate</button>
