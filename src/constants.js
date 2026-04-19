@@ -100,3 +100,14 @@ export const RING_SPAWN_RADIUS = 500;          // horizontal spread around spawn
 export const RING_MIN_HEIGHT = 20;             // meters above ground/water
 export const RING_MAX_HEIGHT = 120;
 export const RINGS_PER_LEVEL = 1;              // TEMP tuning (debug) — revert to 100 for production
+
+// --- Nest Quest gameplay ---
+export const NEST_QUEST_START_SECONDS = 300;   // 5 minutes to find materials and return
+export const NEST_WIN_DISTANCE = 40;           // m from nest to complete the quest
+export const STICK_TREE_COUNT = 10;            // glowing trees distributed across the world
+export const STICK_COLLECT_RADIUS = 15;
+export const STICKS_REQUIRED = 1;              // MVP: one stick is enough
+export const WORM_COUNT = 12;                  // worms scattered on the ground
+export const WORM_COLLECT_RADIUS = 14;
+export const WORM_MAX_ALTITUDE_DIFF = 25;      // bird must be within this vertical range to collect worm
+export const WORMS_REQUIRED = 1;

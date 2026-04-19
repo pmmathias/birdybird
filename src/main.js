@@ -22,6 +22,8 @@ import { ArmAnalyzer } from './pose/ArmAnalyzer.js';
 import { Autopilot, DEMO_SEQUENCE } from './core/Autopilot.js';
 import { RingRush } from './game/RingRush.js';
 import { RingRushUI } from './game/RingRushUI.js';
+import { NestQuest } from './game/NestQuest.js';
+import { NestQuestUI } from './game/NestQuestUI.js';
 import { getBiomeForLevel, applyBiome } from './world/Biomes.js';
 // Mobile imports — MobileInput class stays lazy, but detect mobile synchronously
 // so desktop-only init (ringRush.start, initWebcam) doesn't fire on iPhones.
@@ -125,6 +127,7 @@ const isMobile = isMobileDevice(); // synchronous — see top of file
     hud.hint.style.display = 'none';
     mobileUI.onStart(() => {
       console.log('Mobile game started');
+      if (nestQuest) nestQuest.start();
       if (ringRush) ringRush.start();
       let lastTap = 0;
       document.addEventListener('touchend', () => {
@@ -376,10 +379,15 @@ loop.onUpdate((dt) => {
     // HUD
     hud.update(flightState, input.lift > 0, input.source);
 
-    // Ring Rush
+    // Nest Quest (primary mode — runs before ring-loop so ring pickups can register)
+    if (nestQuest) {
+      nestQuest.update(dt);
+      nestQuestUI.update();
+    }
+    // Ring Rush (or side-rings for nest quest)
     if (ringRush) {
       ringRush.update(dt);
-      ringRushUI.update();
+      if (ringRushUI) ringRushUI.update();
     }
   } else {
     controls.update();
@@ -392,6 +400,7 @@ loop.start();
 // Init webcam in background (desktop only — mobile uses gyroscope)
 if (!isMobile) {
   initWebcam();
-  // On desktop we auto-start Ring Rush — no calibration wizard to wait for
+  // On desktop we auto-start — no calibration wizard to wait for
+  if (nestQuest) nestQuest.start();
   if (ringRush) ringRush.start();
 }
