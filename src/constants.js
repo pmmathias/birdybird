@@ -23,10 +23,10 @@ export const WATER_LEVEL = 15;
 export const CLOUD_HEIGHT = 200;
 export const CLOUD_COUNT = 150;
 
-// Trees
-export const TREE_CLUSTER_COUNT = 4000;
-export const TREES_PER_CLUSTER_MIN = 20;
-export const TREES_PER_CLUSTER_MAX = 80;
+// Trees — reduced desktop count; mobile still gets 25% of this in ForestPlacer
+export const TREE_CLUSTER_COUNT = 2200;
+export const TREES_PER_CLUSTER_MIN = 18;
+export const TREES_PER_CLUSTER_MAX = 55;
 export const TREE_MIN_HEIGHT = 8;
 export const TREE_MAX_HEIGHT = 22;
 

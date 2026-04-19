@@ -191,14 +191,31 @@ if (gameMode === 'ringrush') {
   window.__nestQuest = nestQuest;
 
   // Side-rings: ring spawner runs without its own timer/level/game-over.
-  // It just provides ring collisions; the pickup callback reports to NestQuest.
+  // Auto-start so collisions are active immediately — no calibration gate here.
   const sideRings = new RingRush(scene, world, flightState, { startLevel: 1, ringsPerLevel: Infinity });
+  sideRings.start();
+  sideRings._gracePeriod = 0;
   sideRings.onRingCollected = () => {
     nestQuest.registerRingPickup();
     if (flock) flock.triggerVisit();
   };
   window.__sideRings = sideRings;
   ringRush = sideRings; // reuse the ringRush update-loop slot
+
+  // Nest mode doesn't need a separate landmark — the nest IS the landmark.
+  // Remove the default Sunny-Islands lighthouse so we don't end up with
+  // a lighthouse randomly stuck on a mountain peak.
+  const oldLandmark = scene.getObjectByName('landmark');
+  if (oldLandmark) {
+    scene.remove(oldLandmark);
+    oldLandmark.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.geometry?.dispose?.();
+        if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+        else obj.material?.dispose?.();
+      }
+    });
+  }
 }
 
 // --- Autopilot ---
