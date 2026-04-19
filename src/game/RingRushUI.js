@@ -10,6 +10,7 @@ export class RingRushUI {
     this._build();
   }
 
+  _build() {
     // HUD pill at top-center — hidden by default (CSS), visible when .visible class is added
     const hud = document.createElement('div');
     hud.id = 'rr-hud';
