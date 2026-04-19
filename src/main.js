@@ -20,6 +20,8 @@ import { WebcamManager } from './pose/WebcamManager.js';
 import { PoseDetector } from './pose/PoseDetector.js';
 import { ArmAnalyzer } from './pose/ArmAnalyzer.js';
 import { Autopilot, DEMO_SEQUENCE } from './core/Autopilot.js';
+import { RingRush } from './game/RingRush.js';
+import { RingRushUI } from './game/RingRushUI.js';
 // Mobile imports — loaded lazily to avoid init issues on iOS
 let MobileInput, isMobileDevice, MobileUI;
 import {
@@ -123,6 +125,7 @@ let isMobile = false;
     hud.hint.style.display = 'none';
     mobileUI.onStart(() => {
       console.log('Mobile game started');
+      if (ringRush) ringRush.start();
       let lastTap = 0;
       document.addEventListener('touchend', () => {
         const now = Date.now();
@@ -136,6 +139,16 @@ let isMobile = false;
   }
 })();
 const hud = new HUD();
+
+// --- Ring Rush game mode ---
+// Enabled by default. Disable via ?game=free for pure free-flight debugging.
+let ringRush = null;
+let ringRushUI = null;
+if (urlParams.get('game') !== 'free') {
+  ringRush = new RingRush(scene, world, flightState);
+  ringRushUI = new RingRushUI(ringRush, () => ringRush.restart());
+  window.__ringRush = ringRush;
+}
 
 // --- Autopilot ---
 const autopilot = new Autopilot();
@@ -329,6 +342,12 @@ loop.onUpdate((dt) => {
 
     // HUD
     hud.update(flightState, input.lift > 0, input.source);
+
+    // Ring Rush
+    if (ringRush) {
+      ringRush.update(dt);
+      ringRushUI.update();
+    }
   } else {
     controls.update();
   }
@@ -340,4 +359,6 @@ loop.start();
 // Init webcam in background (desktop only — mobile uses gyroscope)
 if (!isMobile) {
   initWebcam();
+  // On desktop we auto-start Ring Rush — no calibration wizard to wait for
+  if (ringRush) ringRush.start();
 }
