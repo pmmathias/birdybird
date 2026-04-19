@@ -75,16 +75,16 @@ export class Flock {
         });
       }
 
-      // Start hidden — boids appear periodically
+      // Start hidden — flock only appears when explicitly triggered (Ring Rush pickup)
       for (const boid of this._boids) boid.mesh.visible = false;
 
       this._loaded = true;
-      this._phase = 'away';    // 'arriving', 'flying', 'departing', 'away'
-      this._phaseTimer = 5;    // first appearance after 5s
-      this._flyDuration = 10;  // fly together for 10s
-      this._awayDuration = 20; // gone for 20s (total cycle ~35s)
+      this._phase = 'away';         // 'arriving', 'flying', 'departing', 'away'
+      this._phaseTimer = Infinity;  // never auto-appear — triggerVisit() only
+      this._flyDuration = 6;        // shorter stay per pickup
+      this._awayDuration = Infinity;
 
-      console.log(`Flock loaded: ${this._count} boids (appear periodically)`);
+      console.log(`Flock loaded: ${this._count} boids (appear on ring pickups only)`);
     });
   }
 
@@ -119,7 +119,7 @@ export class Flock {
       this._phaseTimer = 3; // 3s to depart
     } else if (this._phase === 'departing' && this._phaseTimer <= 0) {
       this._phase = 'away';
-      this._phaseTimer = this._awayDuration + Math.random() * 10; // some randomness
+      this._phaseTimer = Infinity; // wait for next triggerVisit()
       for (const boid of this._boids) boid.mesh.visible = false;
       return;
     }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Ring } from './Ring.js';
+import { RingBurst } from './RingBurst.js';
 import { getTerrainHeight } from '../world/Terrain.js';
 import {
   WATER_LEVEL,
@@ -21,6 +22,7 @@ export class RingRush {
     this._ringsPerLevel = options.ringsPerLevel || RINGS_PER_LEVEL;
 
     this.rings = [];
+    this.bursts = [];
     this.timer = RING_RUSH_START_SECONDS;
     this.score = 0;
     this.level = options.startLevel || 1;
@@ -89,9 +91,19 @@ export class RingRush {
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const ring = this.rings[i];
       if (birdPos.distanceTo(ring.mesh.position) < RING_COLLECT_RADIUS) {
+        // Spawn sparkle burst at the ring's position before removing
+        this.bursts.push(new RingBurst(this.scene, ring.mesh.position));
         this._onRingCollected();
         this.scene.remove(ring.mesh);
         this.rings.splice(i, 1);
+      }
+    }
+
+    // Advance & cull bursts
+    for (let i = this.bursts.length - 1; i >= 0; i--) {
+      if (!this.bursts[i].update(dt)) {
+        this.bursts[i].dispose();
+        this.bursts.splice(i, 1);
       }
     }
 

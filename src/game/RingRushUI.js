@@ -85,12 +85,32 @@ export class RingRushUI {
     this._levelEl.textContent = rr.level;
     this._levelProgEl.textContent = rr.ringsThisLevel;
 
+    // Detect score change for ring-juice: pulse + bonus popup
+    if (this._lastScore !== undefined && rr.score > this._lastScore) {
+      this._flashRingCollect();
+    }
+    this._lastScore = rr.score;
+
     if (rr.gameOver && !this._modalShown) {
       this._finalEl.textContent = rr.score;
       this._bestEl.textContent = rr.highscore;
       this._modal.classList.add('visible');
       this._modalShown = true;
     }
+  }
+
+  _flashRingCollect() {
+    // Timer pulse
+    this._timerEl.classList.remove('hit');
+    void this._timerEl.offsetWidth;
+    this._timerEl.classList.add('hit');
+
+    // +10s bonus popup
+    const popup = document.createElement('div');
+    popup.className = 'rr-bonus-popup';
+    popup.textContent = '+10s';
+    document.body.appendChild(popup);
+    setTimeout(() => popup.remove(), 900);
   }
 
   _hideModal() {
