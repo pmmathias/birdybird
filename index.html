@@ -13,8 +13,37 @@
   <link rel="manifest" href="manifest.json" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
+    /* Dynamic viewport height (dvh) — adjusts when Safari's URL bar shrinks */
+    html { width: 100%; height: 100vh; height: 100dvh; }
+    body {
+      width: 100%; height: 100vh; height: 100dvh;
+      /* +1px so iOS Safari has something to scroll, which collapses the URL bar */
+      min-height: calc(100dvh + 1px);
+      overflow: hidden;
+    }
     canvas { display: block; }
+
+    /* Install-as-App hint — only shown on iOS Safari when not already standalone */
+    #install-hint {
+      position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+      z-index: 950; display: none;
+      background: rgba(10, 22, 40, 0.85);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(96, 192, 255, 0.35);
+      border-radius: 999px;
+      padding: 8px 14px 8px 14px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.88);
+      max-width: calc(100vw - 24px);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #install-hint.visible { display: flex; align-items: center; gap: 10px; }
+    #install-hint-close {
+      background: transparent; border: none; color: rgba(255, 255, 255, 0.6);
+      font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px;
+      font-weight: 300;
+    }
 
     /* --- Top bar --- */
     #topbar {
@@ -157,7 +186,47 @@
     </div>
   </div>
 
+  <!-- Install-as-App hint (iOS Safari only, non-standalone) -->
+  <div id="install-hint">
+    <span>Share &rarr; Zum Home-Bildschirm &rarr; Vollbild</span>
+    <button id="install-hint-close" aria-label="Ausblenden">&times;</button>
+  </div>
+
   <script>
+    // --- iOS URL-bar collapse: scroll 1px on first user gesture ---
+    // Apple blocks auto-scroll-on-load, so we defer until the user taps.
+    (() => {
+      let done = false;
+      const collapse = () => {
+        if (done) return;
+        done = true;
+        window.scrollTo(0, 1);
+      };
+      window.addEventListener('touchstart', collapse, { once: true, passive: true });
+      window.addEventListener('click', collapse, { once: true });
+    })();
+
+    // --- Install-as-App hint for iOS Safari (only if not yet added to home screen) ---
+    (() => {
+      const ua = navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+      const isStandalone = window.navigator.standalone ||
+                           window.matchMedia('(display-mode: standalone)').matches;
+      const dismissed = localStorage.getItem('installHintDismissed') === '1';
+
+      if (isIOS && isSafari && !isStandalone && !dismissed) {
+        const hint = document.getElementById('install-hint');
+        // Delay a few seconds so the game UI appears first
+        setTimeout(() => hint.classList.add('visible'), 3500);
+        document.getElementById('install-hint-close').addEventListener('click', () => {
+          hint.classList.remove('visible');
+          localStorage.setItem('installHintDismissed', '1');
+        });
+      }
+    })();
+
     // Credits overlay
     const ov = document.getElementById('credits-overlay');
     document.getElementById('credits-btn').addEventListener('click', () => ov.classList.add('open'));
