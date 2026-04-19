@@ -17,6 +17,7 @@ export const BIOMES = [
     ambient: { color: 0xffffff, intensity: 0.4 },
     sun: { color: 0xffffff, intensity: 1.2 },
     treeTint: 0xffffff,
+    forest: { density: 1.0, types: ['oak', 'pine', 'birch', 'bush'] },
   },
   {
     name: 'Golden Hour',
@@ -25,6 +26,7 @@ export const BIOMES = [
     ambient: { color: 0xffd8a0, intensity: 0.5 },
     sun: { color: 0xffc088, intensity: 1.45 },
     treeTint: 0xffaa66, // autumn orange
+    forest: { density: 0.9, types: ['oak', 'birch'] }, // deciduous autumn
   },
   {
     name: 'Arctic Dawn',
@@ -33,6 +35,7 @@ export const BIOMES = [
     ambient: { color: 0xd0e0f0, intensity: 0.55 },
     sun: { color: 0xe0ecff, intensity: 1.05 },
     treeTint: 0xd8e8ff, // snow-frosted
+    forest: { density: 0.5, types: ['pine', 'bush'] }, // sparse taiga
   },
   {
     name: 'Desert Noon',
@@ -41,6 +44,7 @@ export const BIOMES = [
     ambient: { color: 0xfff2d0, intensity: 0.55 },
     sun: { color: 0xfff4d0, intensity: 1.4 },
     treeTint: 0xbb9844, // parched / sand-dusted
+    forest: { density: 0.15, types: ['bush'] }, // barely anything
   },
   {
     name: 'Stormy Dusk',
@@ -49,6 +53,7 @@ export const BIOMES = [
     ambient: { color: 0x707080, intensity: 0.35 },
     sun: { color: 0xff9060, intensity: 0.9 },
     treeTint: 0x8080a0, // muted cool
+    forest: { density: 1.4, types: ['pine'] }, // dense dark pine
   },
   {
     name: 'Night Sky',
@@ -57,6 +62,7 @@ export const BIOMES = [
     ambient: { color: 0x334266, intensity: 0.45 },
     sun: { color: 0x7090d0, intensity: 0.75 },
     treeTint: 0x334280, // deep blue
+    forest: { density: 0.8, types: ['pine', 'oak'] },
   },
 ];
 

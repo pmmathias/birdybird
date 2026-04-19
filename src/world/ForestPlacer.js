@@ -62,9 +62,17 @@ function getValidTypes(elevation) {
 /**
  * Place tree clusters across the terrain using noise-based distribution.
  * Uses multiple InstancedMesh for different tree types.
+ *
+ * @param {Array}  arcs            — terrain arcs for height sampling
+ * @param {Array}  housePositions  — building positions to avoid
+ * @param {Object} options         — biome-specific overrides:
+ *   - density (0..2, default 1)  — multiplier for cluster count
+ *   - types   (string[])         — allowed tree-type names (e.g. ['pine','bush'])
  */
-export function createForest(arcs, housePositions = []) {
-  // Prepare materials and geometries per type
+export function createForest(arcs, housePositions = [], options = {}) {
+  const density = options.density ?? 1.0;
+  const allowedTypeNames = options.types;
+
   // Color palettes for each tree type
   const treeColors = {
     oak: { trunk: 0x5a3a1a, crown: 0x2a6b1e },
@@ -84,10 +92,11 @@ export function createForest(arcs, housePositions = []) {
     return { type, geo, mat, transforms: [] };
   });
 
-  // Scatter trees (reduced on mobile)
+  // Scatter trees (reduced on mobile) — density multiplier from biome
   const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
     || navigator.maxTouchPoints > 1 || 'ontouchstart' in window;
-  const clusterLimit = IS_MOBILE ? Math.floor(TREE_CLUSTER_COUNT * 0.25) : TREE_CLUSTER_COUNT;
+  const baseLimit = IS_MOBILE ? Math.floor(TREE_CLUSTER_COUNT * 0.25) : TREE_CLUSTER_COUNT;
+  const clusterLimit = Math.max(1, Math.floor(baseLimit * density));
   for (let c = 0; c < clusterLimit; c++) {
     const clusterX = randomRange(-WORLD_HALF * 0.9, WORLD_HALF * 0.9);
     const clusterZ = randomRange(-WORLD_HALF * 0.9, WORLD_HALF * 0.9);
@@ -119,10 +128,13 @@ export function createForest(arcs, housePositions = []) {
       }
       if (nearHouse) continue;
 
-      // Pick a random valid tree type for this elevation
+      // Pick a random valid tree type for this elevation, filtered by biome
       const validTypes = getValidTypes(terrainY);
-      if (validTypes.length === 0) continue;
-      const chosenType = validTypes[Math.floor(Math.random() * validTypes.length)];
+      const filteredTypes = allowedTypeNames
+        ? validTypes.filter((t) => allowedTypeNames.includes(t.name))
+        : validTypes;
+      if (filteredTypes.length === 0) continue;
+      const chosenType = filteredTypes[Math.floor(Math.random() * filteredTypes.length)];
       const data = typeData.find((d) => d.type.name === chosenType.name);
 
       const height = randomRange(chosenType.heightScale[0], chosenType.heightScale[1]);

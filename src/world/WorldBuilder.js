@@ -101,9 +101,28 @@ export function buildWorld(scene, renderer) {
 
   // --- Forest (placed AFTER houses, excludes tree positions near buildings) ---
   console.time('Forest');
-  const forest = createForest(arcs, housePositions);
+  let forest = createForest(arcs, housePositions);
   scene.add(forest);
   console.timeEnd('Forest');
+
+  /**
+   * Rebuild the forest with biome-specific options.
+   * Called on level-up so each biome has its own vegetation character.
+   */
+  function regenerateForest(biomeForestOptions = {}) {
+    if (forest) {
+      scene.remove(forest);
+      forest.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.geometry?.dispose?.();
+          if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+          else obj.material?.dispose?.();
+        }
+      });
+    }
+    forest = createForest(arcs, housePositions, biomeForestOptions);
+    scene.add(forest);
+  }
 
   // --- Underwater world (reduced on mobile) ---
   const underwater = IS_MOBILE ? null : new UnderwaterWorld(scene, arcs);
@@ -125,5 +144,5 @@ export function buildWorld(scene, renderer) {
     if (underwater) underwater.update(dt, birdAltitude);
   }
 
-  return { update, arcs, terrainChunks: chunks };
+  return { update, arcs, terrainChunks: chunks, regenerateForest };
 }

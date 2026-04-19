@@ -156,7 +156,10 @@ if (urlParams.get('game') !== 'free') {
   if (ringRush.level > 1) {
     const biome = getBiomeForLevel(ringRush.level);
     // Defer one frame so scene + renderer are ready
-    setTimeout(() => applyBiome(scene, biome, renderer), 0);
+    setTimeout(() => {
+      applyBiome(scene, biome, renderer);
+      if (biome.forest && world.regenerateForest) world.regenerateForest(biome.forest);
+    }, 0);
   }
   // Each ring collected → flock comes to visit (or extends its visit)
   ringRush.onRingCollected = () => {
@@ -168,7 +171,10 @@ if (urlParams.get('game') !== 'free') {
     ringRushUI.showLevelUp(level, biome.name);
     if (navigator.vibrate) navigator.vibrate([40, 80, 40]);
     // Apply roughly at the flash peak so the transition is hidden behind the overlay
-    setTimeout(() => applyBiome(scene, biome, renderer), 500);
+    setTimeout(() => {
+      applyBiome(scene, biome, renderer);
+      if (biome.forest && world.regenerateForest) world.regenerateForest(biome.forest);
+    }, 500);
   };
   window.__ringRush = ringRush;
 }
