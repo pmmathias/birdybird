@@ -18,6 +18,7 @@ export const BIOMES = [
     sun: { color: 0xffffff, intensity: 1.2 },
     treeTint: 0xffffff,
     forest: { density: 1.0, types: ['oak', 'pine', 'birch', 'bush'] },
+    waterColor: 0x3aa6b0, // tropical teal
   },
   {
     name: 'Golden Hour',
@@ -27,6 +28,7 @@ export const BIOMES = [
     sun: { color: 0xffc088, intensity: 1.45 },
     treeTint: 0xffaa66, // autumn orange
     forest: { density: 0.9, types: ['oak', 'birch'] }, // deciduous autumn
+    waterColor: 0xb77030, // warm amber
   },
   {
     name: 'Arctic Dawn',
@@ -36,6 +38,7 @@ export const BIOMES = [
     sun: { color: 0xe0ecff, intensity: 1.05 },
     treeTint: 0xd8e8ff, // snow-frosted
     forest: { density: 0.5, types: ['pine', 'bush'] }, // sparse taiga
+    waterColor: 0x6890b0, // icy pale blue
   },
   {
     name: 'Desert Noon',
@@ -45,6 +48,7 @@ export const BIOMES = [
     sun: { color: 0xfff4d0, intensity: 1.4 },
     treeTint: 0xbb9844, // parched / sand-dusted
     forest: { density: 0.15, types: ['bush'] }, // barely anything
+    waterColor: 0x8a8a55, // oasis olive
   },
   {
     name: 'Stormy Dusk',
@@ -54,6 +58,7 @@ export const BIOMES = [
     sun: { color: 0xff9060, intensity: 0.9 },
     treeTint: 0x8080a0, // muted cool
     forest: { density: 1.4, types: ['pine'] }, // dense dark pine
+    waterColor: 0x241a30, // deep violet
   },
   {
     name: 'Night Sky',
@@ -63,6 +68,7 @@ export const BIOMES = [
     sun: { color: 0x7090d0, intensity: 0.75 },
     treeTint: 0x334280, // deep blue
     forest: { density: 0.8, types: ['pine', 'oak'] },
+    waterColor: 0x08122a, // obsidian midnight
   },
 ];
 
@@ -110,6 +116,16 @@ export function applyBiome(scene, biome, renderer) {
   }
 
   if (scene.fog) scene.fog.color.setHex(biome.fog);
+
+  // Water color — Three.js Water class exposes a waterColor uniform on both
+  // the iFFT Ocean3 path and the Gerstner fallback.
+  if (biome.waterColor !== undefined) {
+    scene.traverse((obj) => {
+      if (obj.material && obj.material.uniforms && obj.material.uniforms.waterColor) {
+        obj.material.uniforms.waterColor.value.setHex(biome.waterColor);
+      }
+    });
+  }
 
   // Tree-tint: multiplicative per-channel modulation over the baseline colors.
   // We remember the original color on the material once, then blend from it

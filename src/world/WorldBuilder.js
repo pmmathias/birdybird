@@ -3,6 +3,7 @@ import { createTerrain } from './Terrain.js';
 import { createWaterPlane } from './WaterPlane.js';
 import { createCloudLayer } from './CloudPlane.js';
 import { createForest } from './ForestPlacer.js';
+import { createLandmark } from './Landmarks.js';
 import { createHouses } from './HousePlacer.js';
 import { createHotelResorts } from './HotelResort.js';
 import { UnderwaterWorld } from './Underwater.js';
@@ -124,6 +125,25 @@ export function buildWorld(scene, renderer) {
     scene.add(forest);
   }
 
+  // --- Biome landmark (lighthouse, pyramid, iceberg, …) ---
+  let landmark = createLandmark('Sunny Islands', arcs);
+  if (landmark) scene.add(landmark);
+
+  function regenerateLandmark(biome) {
+    if (landmark) {
+      scene.remove(landmark);
+      landmark.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.geometry?.dispose?.();
+          if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+          else obj.material?.dispose?.();
+        }
+      });
+    }
+    landmark = createLandmark(biome.name, arcs);
+    if (landmark) scene.add(landmark);
+  }
+
   // --- Underwater world (reduced on mobile) ---
   const underwater = IS_MOBILE ? null : new UnderwaterWorld(scene, arcs);
 
@@ -144,5 +164,5 @@ export function buildWorld(scene, renderer) {
     if (underwater) underwater.update(dt, birdAltitude);
   }
 
-  return { update, arcs, terrainChunks: chunks, regenerateForest };
+  return { update, arcs, terrainChunks: chunks, regenerateForest, regenerateLandmark };
 }

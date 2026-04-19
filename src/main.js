@@ -159,6 +159,7 @@ if (urlParams.get('game') !== 'free') {
     setTimeout(() => {
       applyBiome(scene, biome, renderer);
       if (biome.forest && world.regenerateForest) world.regenerateForest(biome.forest);
+      if (world.regenerateLandmark) world.regenerateLandmark(biome);
     }, 0);
   }
   // Each ring collected → flock comes to visit (or extends its visit)
@@ -174,6 +175,7 @@ if (urlParams.get('game') !== 'free') {
     setTimeout(() => {
       applyBiome(scene, biome, renderer);
       if (biome.forest && world.regenerateForest) world.regenerateForest(biome.forest);
+      if (world.regenerateLandmark) world.regenerateLandmark(biome);
     }, 500);
   };
   window.__ringRush = ringRush;
