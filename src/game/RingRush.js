@@ -12,15 +12,18 @@ import {
 const HIGHSCORE_KEY = 'birdybird.ringrush.highscore';
 
 export class RingRush {
-  constructor(scene, world, flightState) {
+  constructor(scene, world, flightState, options = {}) {
     this.scene = scene;
     this.world = world;
     this.flightState = flightState;
 
+    // Debug overrides
+    this._ringsPerLevel = options.ringsPerLevel || RINGS_PER_LEVEL;
+
     this.rings = [];
     this.timer = RING_RUSH_START_SECONDS;
     this.score = 0;
-    this.level = 1;
+    this.level = options.startLevel || 1;
     this.ringsThisLevel = 0;
     this.highscore = parseInt(localStorage.getItem(HIGHSCORE_KEY), 10) || 0;
     this.gameOver = false;
@@ -108,7 +111,7 @@ export class RingRush {
     if (this.onRingCollected) this.onRingCollected();
 
     // Level-up check
-    if (this.ringsThisLevel >= RINGS_PER_LEVEL) {
+    if (this.ringsThisLevel >= this._ringsPerLevel) {
       this.level++;
       this.ringsThisLevel = 0;
       if (this.onLevelUp) this.onLevelUp(this.level);

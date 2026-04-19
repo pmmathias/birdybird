@@ -143,8 +143,21 @@ const hud = new HUD();
 let ringRush = null;
 let ringRushUI = null;
 if (urlParams.get('game') !== 'free') {
-  ringRush = new RingRush(scene, world, flightState);
+  // Debug URL params: ?level=3 starts at level 3 (biome preview);
+  //                   ?ringsperlevel=5 cuts level-up threshold for quick testing
+  const rrOptions = {};
+  if (urlParams.has('level')) rrOptions.startLevel = parseInt(urlParams.get('level'), 10) || 1;
+  if (urlParams.has('ringsperlevel')) rrOptions.ringsPerLevel = parseInt(urlParams.get('ringsperlevel'), 10) || 100;
+
+  ringRush = new RingRush(scene, world, flightState, rrOptions);
   ringRushUI = new RingRushUI(ringRush, () => ringRush.restart());
+
+  // If we're starting above level 1, apply that biome immediately
+  if (ringRush.level > 1) {
+    const biome = getBiomeForLevel(ringRush.level);
+    // Defer one frame so scene + renderer are ready
+    setTimeout(() => applyBiome(scene, biome, renderer), 0);
+  }
   // Each ring collected → flock comes to visit (or extends its visit)
   ringRush.onRingCollected = () => {
     if (flock) flock.triggerVisit();
