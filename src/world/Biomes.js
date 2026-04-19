@@ -16,6 +16,7 @@ export const BIOMES = [
     fog: 0xb0d0e8,
     ambient: { color: 0xffffff, intensity: 0.4 },
     sun: { color: 0xffffff, intensity: 1.2 },
+    treeTint: 0xffffff,
   },
   {
     name: 'Golden Hour',
@@ -23,6 +24,7 @@ export const BIOMES = [
     fog: 0xffb070,
     ambient: { color: 0xffd8a0, intensity: 0.5 },
     sun: { color: 0xffc088, intensity: 1.45 },
+    treeTint: 0xffaa66, // autumn orange
   },
   {
     name: 'Arctic Dawn',
@@ -30,6 +32,7 @@ export const BIOMES = [
     fog: 0xc0d4e4,
     ambient: { color: 0xd0e0f0, intensity: 0.55 },
     sun: { color: 0xe0ecff, intensity: 1.05 },
+    treeTint: 0xd8e8ff, // snow-frosted
   },
   {
     name: 'Desert Noon',
@@ -37,6 +40,7 @@ export const BIOMES = [
     fog: 0xe8d8b0,
     ambient: { color: 0xfff2d0, intensity: 0.55 },
     sun: { color: 0xfff4d0, intensity: 1.4 },
+    treeTint: 0xbb9844, // parched / sand-dusted
   },
   {
     name: 'Stormy Dusk',
@@ -44,6 +48,7 @@ export const BIOMES = [
     fog: 0x504050,
     ambient: { color: 0x707080, intensity: 0.35 },
     sun: { color: 0xff9060, intensity: 0.9 },
+    treeTint: 0x8080a0, // muted cool
   },
   {
     name: 'Night Sky',
@@ -51,6 +56,7 @@ export const BIOMES = [
     fog: 0x0a1430,
     ambient: { color: 0x334266, intensity: 0.45 },
     sun: { color: 0x7090d0, intensity: 0.75 },
+    treeTint: 0x334280, // deep blue
   },
 ];
 
@@ -98,6 +104,24 @@ export function applyBiome(scene, biome, renderer) {
   }
 
   if (scene.fog) scene.fog.color.setHex(biome.fog);
+
+  // Tree-tint: multiplicative per-channel modulation over the baseline colors.
+  // We remember the original color on the material once, then blend from it
+  // each time so repeated biome switches don't compound.
+  if (biome.treeTint !== undefined) {
+    const forest = scene.getObjectByName('forest');
+    if (forest) {
+      const tint = new THREE.Color(biome.treeTint);
+      forest.traverse((obj) => {
+        if (obj.isMesh && obj.material && obj.material.color) {
+          if (!obj.material.userData._baseColor) {
+            obj.material.userData._baseColor = obj.material.color.clone();
+          }
+          obj.material.color.copy(obj.material.userData._baseColor).multiply(tint);
+        }
+      });
+    }
+  }
 
   // Regenerate env map from new sky so reflections match the mood
   if (renderer && sky) {
