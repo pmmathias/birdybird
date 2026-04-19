@@ -10,8 +10,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="birdybird" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <!-- ?v=2 breaks the iOS manifest cache after the /VogelSimulator/ start-url mix-up -->
-  <link rel="manifest" href="manifest.json?v=2" />
+  <!-- Cache-bust the manifest so iOS re-reads it after identity/start fixes -->
+  <link rel="manifest" href="manifest.json?v=4" />
+  <!-- Reduce iOS HTML caching so the latest JS bundle hash is always picked up -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     /* Dynamic viewport height (dvh) — adjusts when Safari's URL bar shrinks */

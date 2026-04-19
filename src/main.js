@@ -23,8 +23,12 @@ import { Autopilot, DEMO_SEQUENCE } from './core/Autopilot.js';
 import { RingRush } from './game/RingRush.js';
 import { RingRushUI } from './game/RingRushUI.js';
 import { getBiomeForLevel, applyBiome } from './world/Biomes.js';
-// Mobile imports — loaded lazily to avoid init issues on iOS
-let MobileInput, isMobileDevice, MobileUI;
+// Mobile imports — MobileInput class stays lazy, but detect mobile synchronously
+// so desktop-only init (ringRush.start, initWebcam) doesn't fire on iPhones.
+let MobileInput, MobileUI;
+const isMobileDevice = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  || navigator.maxTouchPoints > 1
+  || 'ontouchstart' in window;
 import {
   CAMERA_FOV, CAMERA_NEAR, CAMERA_FAR,
   FOG_NEAR, FOG_FAR,
@@ -107,13 +111,11 @@ input.onModeChange = (isKeyboard) => {
 // --- Mobile input (lazy init) ---
 let mobileInput = null;
 let mobileUI = null;
-let isMobile = false;
+const isMobile = isMobileDevice(); // synchronous — see top of file
 
 (async () => {
   const mod = await import('./core/MobileInput.js');
   MobileInput = mod.MobileInput;
-  isMobileDevice = mod.isMobileDevice;
-  isMobile = isMobileDevice();
 
   if (isMobile) {
     const uiMod = await import('./ui/MobileUI.js');
