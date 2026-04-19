@@ -183,6 +183,26 @@ export class Flock {
   }
 
   /**
+   * Nudge the flock to come visit NOW (or extend the current visit).
+   * Called on Ring Rush pickups — the bird gets company every time it scores.
+   */
+  triggerVisit() {
+    if (!this._loaded) return;
+    if (this._phase === 'away') {
+      // Drop the remaining away-time; update() will handle arrival on next frame
+      this._phaseTimer = 0;
+    } else if (this._phase === 'flying' || this._phase === 'arriving') {
+      // Already here — extend stay
+      this._phase = 'flying';
+      this._phaseTimer = this._flyDuration;
+    } else if (this._phase === 'departing') {
+      // Change their mind — come back!
+      this._phase = 'flying';
+      this._phaseTimer = this._flyDuration;
+    }
+  }
+
+  /**
    * Scatter boids outward (called during dive for dramatic effect).
    */
   scatter() {

@@ -92,10 +92,11 @@ export const CHASE_HEIGHT = 5;
 export const GRASS_TEXTURE_REPEAT = 128;
 
 // --- Ring Rush gameplay ---
-export const RING_COUNT = 20;
+export const RING_COUNT = 20;                  // rings visible at once
 export const RING_COLLECT_RADIUS = 8;          // meters — bird within this distance collects the ring
 export const RING_RUSH_START_SECONDS = 60;
-export const RING_BONUS_SECONDS = 3;           // +this per ring collected
+export const RING_BONUS_SECONDS = 10;          // +this per ring collected (small wins feel huge)
 export const RING_SPAWN_RADIUS = 500;          // horizontal spread around spawn
 export const RING_MIN_HEIGHT = 20;             // meters above ground/water
 export const RING_MAX_HEIGHT = 120;
+export const RINGS_PER_LEVEL = 100;            // collect this many → level up

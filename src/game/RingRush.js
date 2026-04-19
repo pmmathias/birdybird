@@ -6,6 +6,7 @@ import {
   RING_COUNT, RING_COLLECT_RADIUS,
   RING_RUSH_START_SECONDS, RING_BONUS_SECONDS,
   RING_SPAWN_RADIUS, RING_MIN_HEIGHT, RING_MAX_HEIGHT,
+  RINGS_PER_LEVEL,
 } from '../constants.js';
 
 const HIGHSCORE_KEY = 'birdybird.ringrush.highscore';
@@ -19,11 +20,17 @@ export class RingRush {
     this.rings = [];
     this.timer = RING_RUSH_START_SECONDS;
     this.score = 0;
+    this.level = 1;
+    this.ringsThisLevel = 0;
     this.highscore = parseInt(localStorage.getItem(HIGHSCORE_KEY), 10) || 0;
     this.gameOver = false;
     this._started = false;
     this._elapsedT = 0;
     this._gracePeriod = 0;
+
+    // External-hook callbacks (set by main.js after construction)
+    this.onRingCollected = null;   // fired on every collect — used e.g. to trigger flock
+    this.onLevelUp = null;         // fired when ringsThisLevel hits RINGS_PER_LEVEL
 
     this._spawnRings();
   }
@@ -95,8 +102,17 @@ export class RingRush {
 
   _onRingCollected() {
     this.score++;
+    this.ringsThisLevel++;
     this.timer += RING_BONUS_SECONDS;
     if (navigator.vibrate) navigator.vibrate(25);
+    if (this.onRingCollected) this.onRingCollected();
+
+    // Level-up check
+    if (this.ringsThisLevel >= RINGS_PER_LEVEL) {
+      this.level++;
+      this.ringsThisLevel = 0;
+      if (this.onLevelUp) this.onLevelUp(this.level);
+    }
   }
 
   _onGameOver() {
@@ -111,6 +127,8 @@ export class RingRush {
     this._clearRings();
     this.timer = RING_RUSH_START_SECONDS;
     this.score = 0;
+    this.level = 1;
+    this.ringsThisLevel = 0;
     this.gameOver = false;
     this._elapsedT = 0;
     this._gracePeriod = 2.5;

@@ -93,11 +93,8 @@ const birdModel = new BirdModel(scene);
 const waterSpray = new WaterSpray(scene);
 const fishCatcher = new FishCatcher(scene);
 
-// Flock — desktop only (too heavy for mobile)
-let flock = null;
-if (!('ontouchstart' in window) && navigator.maxTouchPoints <= 1) {
-  flock = new Flock(scene, 24);
-}
+// Flock — enabled on all devices now (mobile can handle it).
+const flock = new Flock(scene, 24);
 const input = new InputManager();
 // Toggle webcam overlay when input mode changes
 input.onModeChange = (isKeyboard) => {
@@ -147,6 +144,15 @@ let ringRushUI = null;
 if (urlParams.get('game') !== 'free') {
   ringRush = new RingRush(scene, world, flightState);
   ringRushUI = new RingRushUI(ringRush, () => ringRush.restart());
+  // Each ring collected → flock comes to visit (or extends its visit)
+  ringRush.onRingCollected = () => {
+    if (flock) flock.triggerVisit();
+  };
+  // Level up → big overlay "LEVEL 2" for a few seconds
+  ringRush.onLevelUp = (level) => {
+    ringRushUI.showLevelUp(level);
+    if (navigator.vibrate) navigator.vibrate([40, 80, 40]);
+  };
   window.__ringRush = ringRush;
 }
 

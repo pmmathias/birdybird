@@ -17,8 +17,22 @@ export class RingRushUI {
     hud.innerHTML = `
       <div class="rr-timer" id="rr-timer">60</div>
       <div class="rr-score"><span id="rr-score">0</span> rings</div>
+      <div class="rr-level">Level <span id="rr-level">1</span> · <span id="rr-level-prog">0</span>/<span id="rr-level-goal">100</span></div>
     `;
     document.body.appendChild(hud);
+
+    // Level-up announcement overlay
+    const levelUp = document.createElement('div');
+    levelUp.id = 'rr-levelup';
+    levelUp.innerHTML = `
+      <div class="rr-levelup-inner">
+        <div class="rr-levelup-label">Level</div>
+        <div class="rr-levelup-num" id="rr-levelup-num">2</div>
+      </div>
+    `;
+    document.body.appendChild(levelUp);
+    this._levelUpEl = levelUp;
+    this._levelUpNumEl = document.getElementById('rr-levelup-num');
 
     // Game-over modal
     const modal = document.createElement('div');
@@ -39,6 +53,8 @@ export class RingRushUI {
 
     this._timerEl = document.getElementById('rr-timer');
     this._scoreEl = document.getElementById('rr-score');
+    this._levelEl = document.getElementById('rr-level');
+    this._levelProgEl = document.getElementById('rr-level-prog');
     this._modal = modal;
     this._finalEl = document.getElementById('rr-final');
     this._bestEl = document.getElementById('rr-best');
@@ -48,12 +64,23 @@ export class RingRushUI {
     });
   }
 
+  showLevelUp(level) {
+    this._levelUpNumEl.textContent = level;
+    this._levelUpEl.classList.remove('visible');
+    // force reflow to restart animation
+    void this._levelUpEl.offsetWidth;
+    this._levelUpEl.classList.add('visible');
+    setTimeout(() => this._levelUpEl.classList.remove('visible'), 2400);
+  }
+
   update() {
     const rr = this.ringRush;
     const seconds = Math.max(0, Math.ceil(rr.timer));
     this._timerEl.textContent = seconds;
     this._timerEl.classList.toggle('warn', seconds <= 10 && !rr.gameOver);
     this._scoreEl.textContent = rr.score;
+    this._levelEl.textContent = rr.level;
+    this._levelProgEl.textContent = rr.ringsThisLevel;
 
     if (rr.gameOver && !this._modalShown) {
       this._finalEl.textContent = rr.score;
