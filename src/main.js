@@ -188,6 +188,13 @@ if (gameMode === 'ringrush') {
   nestQuest.onStickCollected = () => { if (flock) flock.triggerVisit(); };
   nestQuest.onWormCollected = () => { if (flock) flock.triggerVisit(); };
   nestQuest.onQuestComplete = () => { nestQuestUI.flashQuestComplete(); };
+  nestQuest.onGameOver = (won) => {
+    if (won && nestQuest.nest) {
+      // Happy chick — opens its beak twice like it's chirping for the worm
+      nestQuest.nest.openBeak(500);
+      setTimeout(() => nestQuest.nest.openBeak(500), 650);
+    }
+  };
   window.__nestQuest = nestQuest;
 
   // Side-rings: ring spawner runs without its own timer/level/game-over.
