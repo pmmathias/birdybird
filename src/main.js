@@ -1,274 +1,343 @@
 import * as THREE from 'three';
-import { TiltInput, TILT_STATE } from './input/TiltInput.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createRenderer } from './core/Renderer.js';
+import { createScene } from './core/Scene.js';
+import { GameLoop } from './core/GameLoop.js';
+import { InputManager } from './core/InputManager.js';
+// Debug panel removed — webcam overlay serves as debug view
+import { HUD } from './ui/HUD.js';
+import { WebcamOverlay } from './ui/WebcamOverlay.js';
+import { buildWorld } from './world/WorldBuilder.js';
+import { getTerrainHeight } from './world/Terrain.js';
 import { FlightState } from './flight/FlightState.js';
 import { FlightPhysics } from './flight/FlightPhysics.js';
 import { CameraRig } from './flight/CameraRig.js';
+import { BirdModel } from './flight/BirdModel.js';
+import { Flock } from './flight/Flock.js';
+import { WaterSpray } from './world/WaterSpray.js';
+import { FishCatcher } from './world/FishCatcher.js';
+import { WebcamManager } from './pose/WebcamManager.js';
+import { PoseDetector } from './pose/PoseDetector.js';
+import { ArmAnalyzer } from './pose/ArmAnalyzer.js';
+import { Autopilot, DEMO_SEQUENCE } from './core/Autopilot.js';
+// Mobile imports — loaded lazily to avoid init issues on iOS
+let MobileInput, isMobileDevice, MobileUI;
+import {
+  CAMERA_FOV, CAMERA_NEAR, CAMERA_FAR,
+  FOG_NEAR, FOG_FAR,
+  FLIGHT_MODE,
+} from './constants.js';
 
-// --- Renderer / scene ----------------------------------------------------
+// --- Renderer & Scene ---
+const renderer = createRenderer();
+const scene = createScene(renderer);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-document.body.appendChild(renderer.domElement);
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 150, 700);
-
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
-
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-const sun = new THREE.DirectionalLight(0xffffff, 1.1);
-sun.position.set(80, 120, 60);
-scene.add(sun);
-
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(2000, 2000),
-  new THREE.MeshStandardMaterial({ color: 0x4a7c3a, roughness: 0.9 })
+// --- Camera ---
+const camera = new THREE.PerspectiveCamera(
+  CAMERA_FOV,
+  window.innerWidth / window.innerHeight,
+  CAMERA_NEAR,
+  CAMERA_FAR,
 );
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
+camera.position.set(0, 80, 150);
+window.__camera = camera; // for Renderer.js resize handler
 
-for (let i = 0; i < 120; i++) {
-  const tree = new THREE.Mesh(
-    new THREE.ConeGeometry(1.5 + Math.random() * 1.5, 5 + Math.random() * 5, 6),
-    new THREE.MeshStandardMaterial({ color: 0x2d5a27 })
-  );
-  tree.position.set((Math.random() - 0.5) * 1200, 3, (Math.random() - 0.5) * 1200);
-  scene.add(tree);
+// --- OrbitControls (debug mode) ---
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 20, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.1;
+
+// --- Build the world ---
+const world = buildWorld(scene, renderer);
+
+// --- Flight system ---
+const flightState = new FlightState();
+// Start well above terrain — sample a grid to find max height nearby
+let maxH = 0;
+for (let sx = -200; sx <= 200; sx += 50) {
+  for (let sz = -200; sz <= 200; sz += 50) {
+    maxH = Math.max(maxH, getTerrainHeight(sx, sz, world.arcs));
+  }
 }
+flightState.position.y = maxH + 80;
+flightState.altitude = flightState.position.y;
+console.log(`Spawn height: ${flightState.position.y.toFixed(0)}m (terrain max nearby: ${maxH.toFixed(0)}m)`);
 
-// Reference marker at origin so we don't feel lost in a blank world
-const marker = new THREE.Mesh(
-  new THREE.CylinderGeometry(2, 2, 40, 12),
-  new THREE.MeshStandardMaterial({ color: 0xff4444 })
-);
-marker.position.set(0, 20, 200);
-scene.add(marker);
+// --- URL parameters for testing/debugging ---
+// ?x=100&z=200&y=20&yaw=1.5 → positions bird
+// ?skipcalib=1 → auto-applies default mobile calibration (bypass wizard)
+const urlParams = new URLSearchParams(location.search);
+if (urlParams.has('x')) flightState.position.x = parseFloat(urlParams.get('x'));
+if (urlParams.has('y')) flightState.position.y = parseFloat(urlParams.get('y'));
+if (urlParams.has('z')) flightState.position.z = parseFloat(urlParams.get('z'));
+if (urlParams.has('yaw')) flightState.yaw = parseFloat(urlParams.get('yaw'));
+if (urlParams.has('pitch')) flightState.pitch = parseFloat(urlParams.get('pitch'));
+if (urlParams.has('speed')) {
+  const s = parseFloat(urlParams.get('speed'));
+  flightState.velocity.set(
+    -Math.sin(flightState.yaw) * s,
+    0,
+    -Math.cos(flightState.yaw) * s,
+  );
+}
+if (urlParams.has('mode')) flightState.mode = parseInt(urlParams.get('mode'));
+flightState.altitude = flightState.position.y;
+const flightPhysics = new FlightPhysics(flightState);
+const cameraRig = new CameraRig(camera, flightState);
+const birdModel = new BirdModel(scene);
 
-// --- Bird ---------------------------------------------------------------
+// Water effects
+const waterSpray = new WaterSpray(scene);
+const fishCatcher = new FishCatcher(scene);
 
-const bird = new THREE.Group();
-bird.rotation.order = 'YXZ';
-
-const birdBody = new THREE.Mesh(
-  new THREE.ConeGeometry(0.6, 2.5, 8),
-  new THREE.MeshStandardMaterial({ color: 0xffaa44, roughness: 0.6 })
-);
-// Cone default tip = +Y. Rotate +π/2 around X → tip points to -Z (default bird forward).
-// state.yaw = π then rotates the group 180° around Y so bird visually faces +Z = flight direction.
-birdBody.rotation.x = Math.PI / 2;
-bird.add(birdBody);
-
-const wingL = new THREE.Mesh(
-  new THREE.BoxGeometry(2.5, 0.1, 0.8),
-  new THREE.MeshStandardMaterial({ color: 0xcc7733 })
-);
-wingL.position.set(-1.4, 0, 0);
-bird.add(wingL);
-
-const wingR = wingL.clone();
-wingR.position.x = 1.4;
-bird.add(wingR);
-
-scene.add(bird);
-
-// --- Flight --------------------------------------------------------------
-
-const state = new FlightState();
-const phys = new FlightPhysics(state);
-const cam = new CameraRig(camera);
-
-bird.position.copy(state.position);
-cam.snap(state);
-
-// --- Input state ---------------------------------------------------------
-
-const tilt = new TiltInput();
-let desktopMode = false;
-
-// --- UI wiring -----------------------------------------------------------
-
-const overlay = document.getElementById('start-overlay');
-const rotateOverlay = document.getElementById('rotate-overlay');
-const startBtn = document.getElementById('start-btn');
-const skipBtn = document.getElementById('skip-btn');
-const note = document.getElementById('start-note');
-const calibrateBtn = document.getElementById('calibrate-btn');
-const modePill = document.querySelector('#topbar .pill');
-
-let gameStarted = false;
-
-const isPortrait = () => window.innerHeight > window.innerWidth;
-
-const refreshRotatePrompt = () => {
-  const show = gameStarted && !desktopMode && isPortrait();
-  rotateOverlay.classList.toggle('visible', show);
+// Flock — desktop only (too heavy for mobile)
+let flock = null;
+if (!('ontouchstart' in window) && navigator.maxTouchPoints <= 1) {
+  flock = new Flock(scene, 24);
+}
+const input = new InputManager();
+// Toggle webcam overlay when input mode changes
+input.onModeChange = (isKeyboard) => {
+  if (webcamOverlay) {
+    isKeyboard ? webcamOverlay.hide() : webcamOverlay.show();
+  }
 };
 
-window.addEventListener('resize', refreshRotatePrompt);
-window.addEventListener('orientationchange', refreshRotatePrompt);
+// --- Mobile input (lazy init) ---
+let mobileInput = null;
+let mobileUI = null;
+let isMobile = false;
 
-const setNote = (text, err) => {
-  note.textContent = text;
-  note.classList.toggle('err', !!err);
+(async () => {
+  const mod = await import('./core/MobileInput.js');
+  MobileInput = mod.MobileInput;
+  isMobileDevice = mod.isMobileDevice;
+  isMobile = isMobileDevice();
+
+  if (isMobile) {
+    const uiMod = await import('./ui/MobileUI.js');
+    MobileUI = uiMod.MobileUI;
+    mobileInput = new MobileInput();
+    mobileUI = new MobileUI(mobileInput);
+    hud.hint.style.display = 'none';
+    mobileUI.onStart(() => {
+      console.log('Mobile game started');
+      let lastTap = 0;
+      document.addEventListener('touchend', () => {
+        const now = Date.now();
+        if (now - lastTap < 300) {
+          mobileInput.calibrate();
+          console.log('Recalibrated');
+        }
+        lastTap = now;
+      });
+    });
+  }
+})();
+const hud = new HUD();
+
+// --- Autopilot ---
+const autopilot = new Autopilot();
+// Expose scene + autopilot for Playwright/external control
+window.__scene = scene;
+window.__flightState = flightState;
+window.__flightPhysics = flightPhysics;
+window.__startAutopilot = (seq) => {
+  if (!flightMode) {
+    // Auto-enter flight mode
+    flightMode = true;
+    controls.enabled = false;
+    hud.el.style.display = 'block';
+    hud.flapIndicator.style.display = 'flex';
+  }
+  autopilot.start(seq || DEMO_SEQUENCE);
 };
+window.__stopAutopilot = () => autopilot.stop();
 
-const closeOverlay = () => {
-  overlay.classList.add('hidden');
-  setTimeout(() => { overlay.style.display = 'none'; }, 300);
-  gameStarted = true;
-  refreshRotatePrompt();
-};
+// --- Pose detection ---
+const webcamManager = new WebcamManager();
+const poseDetector = new PoseDetector();
+const armAnalyzer = new ArmAnalyzer();
+let webcamOverlay = null;
+let poseActive = false;
 
-startBtn.addEventListener('click', async () => {
-  if (tilt.state === TILT_STATE.UNSUPPORTED) {
-    setNote('Dieses Gerät hat keinen Gyro-Sensor. Nutze Desktop-Modus.', true);
+// --- Flight mode toggle ---
+let flightMode = true; // start in flight mode
+
+async function initWebcam() {
+  // Double-check: never init webcam on mobile/touch devices
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+    console.log('Touch device detected — skipping webcam init');
     return;
   }
-  setNote('Permission angefragt...');
-  const result = await tilt.requestPermission();
-  if (result === TILT_STATE.GRANTED) {
-    modePill.innerHTML = '<span class="dot ok"></span>tilt · live';
-    calibrateBtn.classList.add('visible');
-    closeOverlay();
-    setTimeout(() => {
-      if (tilt.eventCount === 0) setNote('Permission ok, aber keine Events?', true);
-    }, 1500);
-  } else if (result === TILT_STATE.DENIED) {
-    setNote('Permission abgelehnt. Neu laden oder Desktop-Modus.', true);
-  } else if (result === TILT_STATE.ERROR) {
-    setNote('Fehler beim Permission-Request.', true);
+  const video = await webcamManager.init();
+  if (!video) {
+    console.warn('Webcam not available, using keyboard only.');
+    return;
   }
-});
 
-skipBtn.addEventListener('click', () => {
-  desktopMode = true;
-  modePill.innerHTML = '<span class="dot"></span>desktop · W/S A/D · space flap';
-  closeOverlay();
-});
+  await poseDetector.init();
+  if (!poseDetector.ready) {
+    console.warn('Pose detection not available, using keyboard only.');
+    return;
+  }
 
-calibrateBtn.addEventListener('click', () => {
-  tilt.calibrate();
-  calibrateBtn.textContent = 'Calibrated ✓';
-  setTimeout(() => { calibrateBtn.textContent = 'Recalibrate'; }, 1000);
-});
+  webcamOverlay = new WebcamOverlay(video);
+  poseActive = true;
+  input.poseAvailable = true;
 
-// --- Tap-to-Flap ---------------------------------------------------------
+  // Show overlay if in webcam mode, hide if keyboard
+  if (!input.forceKeyboard) {
+    webcamOverlay.show();
+  } else {
+    webcamOverlay.hide();
+  }
 
-renderer.domElement.addEventListener('pointerdown', () => {
-  phys.flap(1.0);
-});
+  // Auto-calibrate after a short delay
+  setTimeout(() => {
+    const landmarks = poseDetector.detect(webcamManager.video);
+    if (landmarks) {
+      armAnalyzer.calibrate(landmarks);
+      console.log('Pose calibrated! Raise and lower arms to fly.');
+    }
+  }, 2000);
+}
 
-// --- Desktop keyboard fallback -------------------------------------------
-
-const keys = { w: 0, s: 0, a: 0, d: 0, space: 0 };
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyW') keys.w = 1;
-  if (e.code === 'KeyS') keys.s = 1;
-  if (e.code === 'KeyA') keys.a = 1;
-  if (e.code === 'KeyD') keys.d = 1;
-  if (e.code === 'Space') { keys.space = 1; phys.flap(1.0); }
-});
-window.addEventListener('keyup', (e) => {
-  if (e.code === 'KeyW') keys.w = 0;
-  if (e.code === 'KeyS') keys.s = 0;
-  if (e.code === 'KeyA') keys.a = 0;
-  if (e.code === 'KeyD') keys.d = 0;
-  if (e.code === 'Space') keys.space = 0;
-});
+  if (e.code === 'KeyF') {
+    flightMode = !flightMode;
+    controls.enabled = !flightMode;
+    hud.el.style.display = flightMode ? 'block' : 'none';
+    hud.flapIndicator.style.display = flightMode ? 'flex' : 'none';
 
-// --- Resize --------------------------------------------------------------
+    if (flightMode && webcamOverlay) {
+      webcamOverlay.show();
+    } else if (webcamOverlay) {
+      webcamOverlay.hide();
+    }
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-// --- Animate -------------------------------------------------------------
-
-const hudRoll = document.getElementById('hud-roll');
-const hudPitch = document.getElementById('hud-pitch');
-const fpsEl = document.getElementById('fps');
-
-const dbgAngle = document.getElementById('dbg-angle');
-const dbgSb = document.getElementById('dbg-sb');
-const dbgSg = document.getElementById('dbg-sg');
-const dbgRb = document.getElementById('dbg-rb');
-const dbgRg = document.getElementById('dbg-rg');
-const dbgR = document.getElementById('dbg-r');
-const dbgP = document.getElementById('dbg-p');
-
-let lastFpsUpdate = performance.now();
-let frames = 0;
-
-const clock = new THREE.Clock();
-const MAX_DT = 0.066; // clamp to avoid big jumps after tab switch
-
-function animate() {
-  requestAnimationFrame(animate);
-
-  const dt = Math.min(clock.getDelta(), MAX_DT);
-
-  // --- Input to physics ---
-  let rollInput = 0;
-  let pitchInput = 0;
-
-  tilt.update();
-
-  if (tilt.active) {
-    rollInput = tilt.roll;
-    pitchInput = tilt.pitch;
-  } else if (desktopMode) {
-    rollInput = (keys.d - keys.a);
-    pitchInput = (keys.s - keys.w);
+    hud.hint.innerHTML = flightMode
+      ? 'SPACE = Flap &nbsp;|&nbsp; A/D = Turn &nbsp;|&nbsp; W = Dive &nbsp;|&nbsp; S = Climb &nbsp;|&nbsp; T = Toggle Webcam/Keys &nbsp;|&nbsp; F = Debug Cam &nbsp;|&nbsp; C = Recalibrate'
+      : 'F = Enter Flight Mode &nbsp;|&nbsp; Mouse = Orbit Camera';
   }
 
-  phys.applyRoll(rollInput, dt);
-  phys.applyPitch(pitchInput, dt);
-  phys.update(dt);
-
-  // --- Bird visual ---
-  bird.position.copy(state.position);
-  bird.rotation.set(state.pitch, state.yaw, state.roll);
-
-  // Wing flap animation — more pronounced during active flap phase
-  const flapIntensity = state.flapPhase > 0 ? 1.0 : 0.3;
-  const flap = Math.sin(clock.elapsedTime * (state.flapPhase > 0 ? 20 : 5)) * 0.25 * flapIntensity;
-  wingL.rotation.z = flap;
-  wingR.rotation.z = -flap;
-
-  // --- Camera ---
-  cam.update(state);
-
-  // --- HUD ---
-  if (hudRoll) {
-    hudRoll.textContent = 'roll ' + ((rollInput * 100) | 0).toString().padStart(4, ' ');
-  }
-  if (hudPitch) {
-    hudPitch.textContent = 'pitch ' + ((pitchInput * 100) | 0).toString().padStart(4, ' ');
+  // P = start autopilot demo
+  if (e.code === 'KeyP') {
+    if (autopilot.active) {
+      autopilot.stop();
+    } else {
+      window.__startAutopilot();
+    }
   }
 
-  const d = tilt.debug;
-  if (dbgAngle) dbgAngle.textContent = d.angle;
-  if (dbgSb) dbgSb.textContent = d.sensorBeta.toFixed(0);
-  if (dbgSg) dbgSg.textContent = d.sensorGamma.toFixed(0);
-  if (dbgRb) dbgRb.textContent = d.remappedBeta.toFixed(0);
-  if (dbgRg) dbgRg.textContent = d.remappedGamma.toFixed(0);
-  if (dbgR) dbgR.textContent = (tilt.roll * 100 | 0);
-  if (dbgP) dbgP.textContent = (tilt.pitch * 100 | 0);
+  // R = regenerate world (clear cache, reload)
+  if (e.code === 'KeyR' && !flightMode) {
+    localStorage.removeItem('world_arcs');
+    localStorage.removeItem('world_heightmap');
+    localStorage.removeItem('world_resolution');
+    localStorage.removeItem('world_version');
+    console.log('World cache cleared — reloading...');
+    location.reload();
+  }
+
+  // Recalibrate pose
+  if (e.code === 'KeyC' && flightMode && poseActive) {
+    const landmarks = poseDetector.detect(webcamManager.video);
+    if (landmarks) {
+      armAnalyzer.calibrate(landmarks);
+      console.log('Recalibrated!');
+    }
+  }
+});
+
+// Start in flight mode
+controls.enabled = false;
+hud.hint.innerHTML = 'SPACE = Flap &nbsp;|&nbsp; A/D = Turn &nbsp;|&nbsp; W = Dive &nbsp;|&nbsp; S = Climb &nbsp;|&nbsp; T = Toggle Webcam/Keys &nbsp;|&nbsp; F = Debug Cam &nbsp;|&nbsp; P = Autopilot';
+
+// Debug panel removed — use webcam overlay for pose debugging
+
+// --- Game Loop ---
+const loop = new GameLoop();
+loop.onUpdate((dt) => {
+  world.update(dt, camera, flightState.altitude);
+
+  if (flightMode) {
+    // Pose detection
+    if (poseActive && webcamManager.ready) {
+      const landmarks = poseDetector.detect(webcamManager.video);
+      const poseData = armAnalyzer.analyze(landmarks);
+      input.setPoseInput(poseData);
+
+      if (webcamOverlay) {
+        webcamOverlay.drawSkeleton(landmarks);
+        webcamOverlay.showGesture(armAnalyzer.gesture);
+      }
+    }
+
+    // Update input (autopilot overrides if active)
+    input.update(dt);
+    autopilot.update(dt, input);
+
+    // Mobile gyro input overrides when active
+    if (mobileInput && mobileInput.active) {
+      mobileInput.update(dt);
+      input.source = 'mobile';
+      input.pitch = mobileInput.pitch;
+      input.roll = mobileInput.roll;
+      input.lift = mobileInput.lift;
+      input.wingSpread = mobileInput.wingSpread;
+    }
+
+    // Terrain height at current position (needed for physics + collision)
+    const groundY = getTerrainHeight(
+      flightState.position.x,
+      flightState.position.z,
+      world.arcs,
+    );
+
+    // Apply controls to physics (mode-dependent)
+    const mode = flightState.mode;
+    let groundInput = null;
+
+    if (mode === FLIGHT_MODE.GROUNDED) {
+      // Ground controls: WASD movement, arrows turn, space jump, shift sprint
+      groundInput = input.getGroundInput();
+      // Flap (Space / shake / gesture) → takeoff
+      if (input.lift > 0.5) {
+        flightPhysics.takeoff();
+      }
+    } else {
+      // Flying/Landing/Takeoff: normal controls
+      flightState.wingSpread = input.wingSpread;
+      flightPhysics.flap(input.lift);
+      flightPhysics.applyRoll(input.roll, dt);
+      flightPhysics.applyPitch(input.pitch, dt);
+    }
+
+    flightPhysics.update(dt, groundY, groundInput);
+    flightPhysics.enforceGround(groundY);
+
+    // Camera follow
+    cameraRig.update(dt);
+    birdModel.update(flightState, dt, camera);
+    if (flock) flock.update(flightState, dt);
+
+    // Water effects
+    waterSpray.update(flightState, dt);
+    fishCatcher.update(flightState, dt);
+
+    // HUD
+    hud.update(flightState, input.lift > 0, input.source);
+  } else {
+    controls.update();
+  }
 
   renderer.render(scene, camera);
+});
+loop.start();
 
-  frames++;
-  const now = performance.now();
-  if (now - lastFpsUpdate > 500) {
-    const fps = (frames * 1000) / (now - lastFpsUpdate);
-    if (fpsEl) fpsEl.textContent = `${fps.toFixed(0)}fps · ${state.speed.toFixed(0)}m/s · ${state.altitude.toFixed(0)}m`;
-    frames = 0;
-    lastFpsUpdate = now;
-  }
+// Init webcam in background (desktop only — mobile uses gyroscope)
+if (!isMobile) {
+  initWebcam();
 }
-animate();

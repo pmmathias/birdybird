@@ -1,0 +1,17 @@
+{
+  "name": "VogelSimulator",
+  "short_name": "VogelSim",
+  "description": "Fly like a bird — gesture-controlled 3D flight simulator",
+  "start_url": "/VogelSimulator/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0a1628",
+  "theme_color": "#0a1628",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦅</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

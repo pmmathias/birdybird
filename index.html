@@ -1,237 +1,204 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>birdybird</title>
 
+  <!-- PWA: fullscreen on iOS home screen -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="birdybird" />
+  <meta name="apple-mobile-web-app-title" content="VogelSim" />
   <meta name="mobile-web-app-capable" content="yes" />
-
+  <link rel="manifest" href="manifest.json" />
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body {
-      width: 100%; height: 100%; overflow: hidden;
-      background: #0a1628;
-      color: #e0e8f0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      touch-action: none;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
     canvas { display: block; }
 
+    /* --- Top bar --- */
     #topbar {
-      position: fixed; top: max(env(safe-area-inset-top), 10px); left: 10px; right: 10px;
-      display: flex; justify-content: space-between; align-items: center;
-      z-index: 100; pointer-events: none;
+      position: fixed; top: 10px; left: 10px; right: 10px;
+      display: flex; align-items: center; justify-content: space-between;
+      z-index: 900; pointer-events: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     }
-    .pill {
+    #topbar-left, #topbar-right {
+      display: flex; align-items: center; gap: 6px;
+      pointer-events: auto;
+    }
+    .tb-item {
+      display: inline-flex; align-items: center; gap: 6px;
       padding: 7px 12px; border-radius: 999px;
       background: rgba(10, 22, 40, 0.55);
-      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(96, 192, 255, 0.25);
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 12px; font-weight: 600;
-      pointer-events: auto;
-      font-variant-numeric: tabular-nums;
-    }
-    .pill .dot {
-      display: inline-block;
-      width: 6px; height: 6px; border-radius: 50%;
-      background: #ffaa44;
-      margin-right: 6px;
-      vertical-align: middle;
-    }
-    .pill .dot.ok { background: #44dd88; }
-
-    #hud {
-      position: fixed; top: max(env(safe-area-inset-top), 10px);
-      left: 50%; transform: translateX(-50%);
-      display: flex; gap: 6px; z-index: 100;
-      pointer-events: none;
-    }
-    #hud .pill { font-size: 11px; padding: 5px 10px; }
-
-    #debug-panel {
-      position: fixed; top: 50%; right: 10px; transform: translateY(-50%);
-      z-index: 100; pointer-events: none;
-      background: rgba(10, 22, 40, 0.7);
-      border: 1px solid rgba(96, 192, 255, 0.25);
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-      font-size: 10px;
-      line-height: 1.5;
-      color: #aaccdd;
-      font-variant-numeric: tabular-nums;
-    }
-    #debug-panel span { color: #ffaa44; font-weight: 600; display: inline-block; min-width: 32px; text-align: right; margin-left: 2px; }
-
-    #dev-links {
-      position: fixed; bottom: max(env(safe-area-inset-bottom), 10px); left: 10px;
-      z-index: 100; display: flex; gap: 6px; font-size: 10px;
-    }
-    #dev-links a {
-      padding: 4px 8px; border-radius: 6px;
-      background: rgba(10, 22, 40, 0.6);
-      color: #60c0ff; text-decoration: none;
-      border: 1px solid rgba(96, 192, 255, 0.2);
-    }
-
-    #calibrate-btn {
-      position: fixed; bottom: max(env(safe-area-inset-bottom), 10px); right: 10px;
-      z-index: 100;
-      padding: 8px 14px; border-radius: 999px;
-      background: rgba(10, 22, 40, 0.7);
-      color: #60c0ff;
-      font-size: 12px; font-weight: 600;
-      border: 1px solid rgba(96, 192, 255, 0.3);
-      cursor: pointer;
-      display: none;
-    }
-    #calibrate-btn.visible { display: block; }
-    #calibrate-btn:active { transform: scale(0.96); }
-
-    /* Start overlay */
-    #start-overlay {
-      position: fixed; inset: 0; z-index: 1000;
-      background: linear-gradient(180deg, rgba(10,22,40,0.85), rgba(10,22,40,0.95));
       backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-      display: flex; align-items: center; justify-content: center;
-      padding: 20px;
-      transition: opacity 0.3s ease;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 12px; line-height: 1;
+      text-decoration: none; cursor: pointer;
+      transition: all 0.2s ease;
     }
-    #start-overlay.hidden {
-      opacity: 0; pointer-events: none;
+    .tb-item:hover {
+      background: rgba(10, 22, 40, 0.8);
+      border-color: rgba(96, 192, 255, 0.4);
+      color: #fff;
     }
-    #start-card {
-      max-width: 360px; width: 100%;
-      background: rgba(20, 35, 60, 0.9);
-      border: 1px solid rgba(96, 192, 255, 0.3);
-      border-radius: 18px;
-      padding: 28px 22px;
-      text-align: center;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-    }
-    #start-card h1 {
-      color: #ffaa44;
-      font-size: 26px;
-      margin-bottom: 6px;
-      letter-spacing: 0.5px;
-    }
-    #start-card .tag {
-      color: #7a8fa5;
-      font-size: 12px;
-      margin-bottom: 22px;
-      letter-spacing: 0.5px;
-    }
-    #start-card p {
-      color: #bbccdd;
-      font-size: 14px;
-      line-height: 1.5;
-      margin-bottom: 20px;
-    }
-    .start-btn {
-      display: block; width: 100%;
-      padding: 16px;
-      background: linear-gradient(135deg, #2080cc, #40a0ff);
-      color: white;
-      font-size: 16px; font-weight: 700;
-      border: none; border-radius: 12px;
-      cursor: pointer;
-      box-shadow: 0 4px 16px rgba(32,128,204,0.4);
-      letter-spacing: 0.5px;
-    }
-    .start-btn:active { transform: scale(0.98); }
-    .start-btn.secondary {
-      background: transparent;
-      border: 1px solid rgba(96, 192, 255, 0.4);
-      color: #60c0ff;
+    /* Primary logo-style link */
+    .tb-primary {
+      background: linear-gradient(135deg, rgba(32, 128, 204, 0.35), rgba(64, 160, 255, 0.25));
+      border-color: rgba(96, 192, 255, 0.5);
+      color: #fff;
       font-weight: 600;
-      box-shadow: none;
-      margin-top: 10px;
+      font-size: 13px;
+      padding: 8px 14px;
+      box-shadow: 0 2px 8px rgba(32, 128, 204, 0.2);
     }
-    #start-note {
-      margin-top: 14px;
-      font-size: 11px;
-      color: #506880;
-      min-height: 16px;
+    .tb-primary:hover {
+      background: linear-gradient(135deg, rgba(32, 128, 204, 0.55), rgba(64, 160, 255, 0.45));
+      box-shadow: 0 2px 14px rgba(64, 160, 255, 0.4);
     }
-    #start-note.err { color: #ff8866; }
+    .tb-item .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #44dd88; /* iFFT = green */
+    }
+    .tb-item .dot.fallback { background: #ffaa44; } /* Gerstner = amber */
 
-    /* Rotate-your-phone overlay */
-    #rotate-overlay {
-      position: fixed; inset: 0; z-index: 900;
-      background: rgba(10, 22, 40, 0.96);
-      display: none;
-      align-items: center; justify-content: center;
-      text-align: center; padding: 20px;
+    @media (max-width: 500px) {
+      .tb-item { font-size: 11px; padding: 6px 10px; }
+      .tb-primary { font-size: 12px; padding: 7px 12px; }
+      .tb-hide-mobile { display: none; }
     }
-    #rotate-overlay.visible { display: flex; }
-    #rotate-card h2 { color: #ffaa44; font-size: 22px; margin: 14px 0 8px; }
-    #rotate-card p { color: #bbccdd; font-size: 13px; line-height: 1.5; }
-    #rotate-icon {
-      width: 80px; height: 80px;
-      margin: 0 auto 6px;
-      color: #60c0ff;
-      animation: rotate-wiggle 1.8s ease-in-out infinite;
+
+    /* --- Credits overlay --- */
+    #credits-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(8, 16, 32, 0.92);
+      display: none; align-items: center; justify-content: center; padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     }
-    @keyframes rotate-wiggle {
-      0%, 100% { transform: rotate(0deg); }
-      50%      { transform: rotate(-90deg); }
+    #credits-overlay.open { display: flex; }
+    #credits-card {
+      max-width: 520px;
+      background: linear-gradient(135deg, #0a1628 0%, #1a2a4a 50%, #0a1628 100%);
+      border: 1px solid rgba(96, 192, 255, 0.3); border-radius: 16px;
+      padding: 32px; color: white; position: relative;
     }
+    #credits-close {
+      position: absolute; top: 12px; right: 12px;
+      background: transparent; border: none; color: rgba(255, 255, 255, 0.6);
+      font-size: 24px; cursor: pointer; padding: 4px 10px;
+    }
+    #credits-card h2 { color: #60c0ff; font-size: 22px; margin-bottom: 20px; }
+    #credits-card h3 { color: #ffaa44; font-size: 16px; margin-bottom: 8px; }
+    #credits-card .section { margin-bottom: 20px; }
+    #credits-card p { color: #bbccdd; font-size: 13px; line-height: 1.6; }
+    #credits-card a { color: #60c0ff; text-decoration: none; }
+    #credits-card a:hover { text-decoration: underline; }
+    #credits-card .lic-note { color: #667788; font-size: 11px; margin-top: 8px; }
   </style>
 </head>
 <body>
+  <!-- Top bar -->
   <div id="topbar">
-    <div class="pill"><span class="dot"></span>birdybird · T003 tilt</div>
-    <div class="pill" id="fps">— fps</div>
-  </div>
-
-  <div id="hud">
-    <div class="pill"><span id="hud-roll">roll —</span></div>
-    <div class="pill"><span id="hud-pitch">pitch —</span></div>
-  </div>
-
-  <div id="debug-panel">
-    <div>ang <span id="dbg-angle">—</span></div>
-    <div>sens β<span id="dbg-sb">—</span> γ<span id="dbg-sg">—</span></div>
-    <div>remap β<span id="dbg-rb">—</span> γ<span id="dbg-rg">—</span></div>
-    <div>out roll<span id="dbg-r">—</span> pitch<span id="dbg-p">—</span></div>
-  </div>
-
-  <button id="calibrate-btn">Recalibrate</button>
-
-  <div id="dev-links">
-    <a href="tilt-test.html">tilt-test</a>
-    <a href="iframe-test.html">iframe-test</a>
-    <a href="https://github.com/pmmathias/birdybird" target="_blank">github</a>
-  </div>
-
-  <div id="rotate-overlay">
-    <div id="rotate-card">
-      <svg id="rotate-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="7" y="2" width="10" height="20" rx="2" />
-        <line x1="11" y1="18" x2="13" y2="18" />
-      </svg>
-      <h2>Drehe dein Handy</h2>
-      <p>birdybird wird im Querformat geflogen.</p>
+    <div id="topbar-left">
+      <a href="https://ki-mathias.de/" class="tb-item tb-primary">
+        <span>&larr;</span><span>ki-mathias.de</span>
+      </a>
+      <button id="credits-btn" class="tb-item" title="Credits">
+        <span>Credits</span>
+      </button>
+    </div>
+    <div id="topbar-right">
+      <div id="water-mode" class="tb-item tb-hide-mobile" title="Water rendering mode">
+        <span class="dot"></span><span id="water-mode-label">Water</span>
+      </div>
+      <button id="lang-toggle" class="tb-item" style="font-weight:600;">EN</button>
     </div>
   </div>
 
-  <div id="start-overlay">
-    <div id="start-card">
-      <h1>birdybird</h1>
-      <div class="tag">TILT TO FLY</div>
-      <p>Neige dein Handy, um zu steuern. Tippe auf den Button, erlaube den
-      Bewegungs-Zugriff, halte das Gerät dann so wie du es bequem findest —
-      das wird dein Nullpunkt.</p>
-      <button class="start-btn" id="start-btn">Tap to fly</button>
-      <button class="start-btn secondary" id="skip-btn">Desktop-Modus (Maus)</button>
-      <div id="start-note"></div>
+  <!-- Credits overlay -->
+  <div id="credits-overlay">
+    <div id="credits-card">
+      <button id="credits-close">&times;</button>
+      <h2>Credits</h2>
+
+      <div class="section">
+        <h3>🌊 Ocean Waves</h3>
+        <p>
+          The realistic wave simulation uses <b>Phil Crowther's Ocean3 module</b>
+          (WebGL2 iFFT ocean wave generator). Amazing work — thank you, Phil!
+        </p>
+        <div style="margin-top:10px; font-size:12px;">
+          <a href="http://philcrowther.com/Aviation/3JS_demos.html" target="_blank"
+            style="margin-right:12px;">→ Phil's Three.js Demos</a>
+          <a href="https://discourse.threejs.org/t/ifft-ocean-wave-generator-module/51800" target="_blank">→ Discourse Post</a>
+        </div>
+        <p class="lic-note">
+          Ocean3.js © Phil Crowther · Licensed under CC BY-NC-SA 3.0
+        </p>
+      </div>
+
+      <div class="section">
+        <h3>🦅 VogelSimulator</h3>
+        <p>
+          Built with Three.js + MediaPipe. Source code on
+          <a href="https://github.com/pmmathias/VogelSimulator" target="_blank">GitHub</a>.
+        </p>
+      </div>
+
+      <div class="section">
+        <h3>📦 Assets</h3>
+        <p style="font-size:12px; line-height:1.5;">
+          Terrain &amp; building textures: <a href="https://polyhaven.com" target="_blank">Poly Haven</a> (CC0)<br>
+          Stork 3D model: Community asset<br>
+          Blog: <a href="https://ki-mathias.de/" target="_blank">ki-mathias.de</a>
+        </p>
+      </div>
     </div>
   </div>
+
+  <script>
+    // Credits overlay
+    const ov = document.getElementById('credits-overlay');
+    document.getElementById('credits-btn').addEventListener('click', () => ov.classList.add('open'));
+    document.getElementById('credits-close').addEventListener('click', () => ov.classList.remove('open'));
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('open'); });
+
+    // Water mode indicator — updated by WaterPlane.js via window.__waterPath
+    function refreshWaterMode() {
+      const label = document.getElementById('water-mode-label');
+      const dot = document.querySelector('#water-mode .dot');
+      const path = window.__waterPath;
+      if (!label || !dot) return;
+      if (path === 'iFFT') {
+        label.textContent = 'iFFT';
+        dot.classList.remove('fallback');
+        document.getElementById('water-mode').title = 'Waves: FFT-based (Ocean3)';
+      } else if (path === 'Gerstner') {
+        label.textContent = 'Gerstner';
+        dot.classList.add('fallback');
+        document.getElementById('water-mode').title = 'Waves: Gerstner fallback (iFFT unavailable on this device)';
+      } else {
+        label.textContent = '…';
+      }
+    }
+    // Poll until water is initialized (usually <2s)
+    const waterPoll = setInterval(() => {
+      if (window.__waterPath) { refreshWaterMode(); clearInterval(waterPoll); }
+    }, 100);
+    setTimeout(() => clearInterval(waterPoll), 10000);
+  </script>
+
+  <script type="module">
+    import { lang, toggleLang, onLangChange } from '/src/i18n.js';
+    const btn = document.getElementById('lang-toggle');
+    btn.textContent = lang() === 'de' ? 'EN' : 'DE';
+    btn.addEventListener('click', () => {
+      toggleLang();
+      btn.textContent = lang() === 'de' ? 'EN' : 'DE';
+    });
+    onLangChange(() => { btn.textContent = lang() === 'de' ? 'EN' : 'DE'; });
+  </script>
 
   <script type="module" src="/src/main.js"></script>
 </body>
