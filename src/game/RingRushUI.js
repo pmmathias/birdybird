@@ -11,15 +11,17 @@ export class RingRushUI {
   }
 
   _build() {
-    // HUD pill at top-center
+    // HUD pill at top-center — hidden until ringRush.start() fires
     const hud = document.createElement('div');
     hud.id = 'rr-hud';
+    hud.style.display = 'none';
     hud.innerHTML = `
-      <div class="rr-timer" id="rr-timer">60</div>
+      <div class="rr-timer" id="rr-timer">100</div>
       <div class="rr-score"><span id="rr-score">0</span> rings</div>
       <div class="rr-level">Level <span id="rr-level">1</span> · <span id="rr-level-prog">0</span>/<span id="rr-level-goal">100</span></div>
     `;
     document.body.appendChild(hud);
+    this._hudEl = hud;
 
     // Level-up announcement overlay
     const levelUp = document.createElement('div');
@@ -78,6 +80,15 @@ export class RingRushUI {
 
   update() {
     const rr = this.ringRush;
+
+    // Keep the HUD hidden until the game has really started
+    // (mobile calibration wizard still running, or desktop hasn't fired start yet).
+    if (!rr.started) {
+      if (this._hudEl.style.display !== 'none') this._hudEl.style.display = 'none';
+      return;
+    }
+    if (this._hudEl.style.display === 'none') this._hudEl.style.display = 'flex';
+
     const seconds = Math.max(0, Math.ceil(rr.timer));
     this._timerEl.textContent = seconds;
     this._timerEl.classList.toggle('warn', seconds <= 10 && !rr.gameOver);
@@ -105,10 +116,10 @@ export class RingRushUI {
     void this._timerEl.offsetWidth;
     this._timerEl.classList.add('hit');
 
-    // +10s bonus popup
+    // "+ZEIT" bonus popup — the timer is reset to full (100s) on every ring
     const popup = document.createElement('div');
     popup.className = 'rr-bonus-popup';
-    popup.textContent = '+10s';
+    popup.textContent = '+ZEIT';
     document.body.appendChild(popup);
     setTimeout(() => popup.remove(), 900);
   }

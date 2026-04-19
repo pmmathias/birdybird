@@ -47,6 +47,11 @@ export class RingRush {
     this._gracePeriod = 2.5;
   }
 
+  /** Has the game actually started? (HUD uses this to hide before start.) */
+  get started() {
+    return this._started;
+  }
+
   _spawnRings() {
     const origin = this.flightState.position.clone();
     for (let i = 0; i < RING_COUNT; i++) {
@@ -118,7 +123,8 @@ export class RingRush {
   _onRingCollected() {
     this.score++;
     this.ringsThisLevel++;
-    this.timer += RING_BONUS_SECONDS;
+    // Reset timer fully to start — every ring buys you a fresh 100 seconds.
+    this.timer = RING_RUSH_START_SECONDS;
     if (navigator.vibrate) navigator.vibrate(25);
     if (this.onRingCollected) this.onRingCollected();
 
