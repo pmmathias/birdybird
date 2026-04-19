@@ -143,40 +143,28 @@ const isMobile = isMobileDevice(); // synchronous — see top of file
 })();
 const hud = new HUD();
 
-// --- Ring Rush game mode ---
-// Enabled by default. Disable via ?game=free for pure free-flight debugging.
+// --- Game mode selection ---
+// ?game=nest (default) | ringrush | free
+const gameMode = urlParams.get('game') || 'nest';
+
 let ringRush = null;
 let ringRushUI = null;
-if (urlParams.get('game') !== 'free') {
-  // Debug URL params: ?level=3 starts at level 3 (biome preview);
-  //                   ?ringsperlevel=5 cuts level-up threshold for quick testing
+let nestQuest = null;
+let nestQuestUI = null;
+
+if (gameMode === 'ringrush') {
+  // Classic timer-reset ring-collection mode with biome progression
   const rrOptions = {};
   if (urlParams.has('level')) rrOptions.startLevel = parseInt(urlParams.get('level'), 10) || 1;
   if (urlParams.has('ringsperlevel')) rrOptions.ringsPerLevel = parseInt(urlParams.get('ringsperlevel'), 10) || 100;
 
   ringRush = new RingRush(scene, world, flightState, rrOptions);
   ringRushUI = new RingRushUI(ringRush, () => ringRush.restart());
-
-  // If we're starting above level 1, apply that biome immediately
-  if (ringRush.level > 1) {
-    const biome = getBiomeForLevel(ringRush.level);
-    // Defer one frame so scene + renderer are ready
-    setTimeout(() => {
-      applyBiome(scene, biome, renderer);
-      if (biome.forest && world.regenerateForest) world.regenerateForest(biome.forest);
-      if (world.regenerateLandmark) world.regenerateLandmark(biome);
-    }, 0);
-  }
-  // Each ring collected → flock comes to visit (or extends its visit)
-  ringRush.onRingCollected = () => {
-    if (flock) flock.triggerVisit();
-  };
-  // Level up → big overlay + biome swap during the flash peak
+  ringRush.onRingCollected = () => { if (flock) flock.triggerVisit(); };
   ringRush.onLevelUp = (level) => {
     const biome = getBiomeForLevel(level);
     ringRushUI.showLevelUp(level, biome.name);
     if (navigator.vibrate) navigator.vibrate([40, 80, 40]);
-    // Apply roughly at the flash peak so the transition is hidden behind the overlay
     setTimeout(() => {
       applyBiome(scene, biome, renderer);
       if (biome.forest && world.regenerateForest) world.regenerateForest(biome.forest);
@@ -184,6 +172,33 @@ if (urlParams.get('game') !== 'free') {
     }, 500);
   };
   window.__ringRush = ringRush;
+
+  if (ringRush.level > 1) {
+    const biome = getBiomeForLevel(ringRush.level);
+    setTimeout(() => {
+      applyBiome(scene, biome, renderer);
+      if (biome.forest && world.regenerateForest) world.regenerateForest(biome.forest);
+      if (world.regenerateLandmark) world.regenerateLandmark(biome);
+    }, 0);
+  }
+} else if (gameMode === 'nest') {
+  // Nest Quest: find a stick + a worm, return to the nest. Rings on the side.
+  nestQuest = new NestQuest(scene, world, flightState);
+  nestQuestUI = new NestQuestUI(nestQuest, () => nestQuest.restart());
+  nestQuest.onStickCollected = () => { if (flock) flock.triggerVisit(); };
+  nestQuest.onWormCollected = () => { if (flock) flock.triggerVisit(); };
+  nestQuest.onQuestComplete = () => { nestQuestUI.flashQuestComplete(); };
+  window.__nestQuest = nestQuest;
+
+  // Side-rings: ring spawner runs without its own timer/level/game-over.
+  // It just provides ring collisions; the pickup callback reports to NestQuest.
+  const sideRings = new RingRush(scene, world, flightState, { startLevel: 1, ringsPerLevel: Infinity });
+  sideRings.onRingCollected = () => {
+    nestQuest.registerRingPickup();
+    if (flock) flock.triggerVisit();
+  };
+  window.__sideRings = sideRings;
+  ringRush = sideRings; // reuse the ringRush update-loop slot
 }
 
 // --- Autopilot ---
