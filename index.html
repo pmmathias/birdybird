@@ -132,13 +132,16 @@
       top: calc(max(env(safe-area-inset-top), 10px) + 48px);
       left: 50%; transform: translateX(-50%);
       z-index: 850;
-      display: flex; flex-direction: column; align-items: center;
+      /* Hidden by default — RingRushUI adds .visible once the game really starts */
+      display: none;
+      flex-direction: column; align-items: center;
       gap: 2px;
       pointer-events: none;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       font-variant-numeric: tabular-nums;
       text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
     }
+    #rr-hud.visible { display: flex; }
     #rr-hud .rr-timer {
       font-size: 48px; font-weight: 800; line-height: 1;
       color: #ffe088;

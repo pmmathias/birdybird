@@ -10,11 +10,9 @@ export class RingRushUI {
     this._build();
   }
 
-  _build() {
-    // HUD pill at top-center — hidden until ringRush.start() fires
+    // HUD pill at top-center — hidden by default (CSS), visible when .visible class is added
     const hud = document.createElement('div');
     hud.id = 'rr-hud';
-    hud.style.display = 'none';
     hud.innerHTML = `
       <div class="rr-timer" id="rr-timer">100</div>
       <div class="rr-score"><span id="rr-score">0</span> rings</div>
@@ -84,10 +82,10 @@ export class RingRushUI {
     // Keep the HUD hidden until the game has really started
     // (mobile calibration wizard still running, or desktop hasn't fired start yet).
     if (!rr.started) {
-      if (this._hudEl.style.display !== 'none') this._hudEl.style.display = 'none';
+      if (this._hudEl.classList.contains('visible')) this._hudEl.classList.remove('visible');
       return;
     }
-    if (this._hudEl.style.display === 'none') this._hudEl.style.display = 'flex';
+    if (!this._hudEl.classList.contains('visible')) this._hudEl.classList.add('visible');
 
     const seconds = Math.max(0, Math.ceil(rr.timer));
     this._timerEl.textContent = seconds;
