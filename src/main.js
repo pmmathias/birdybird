@@ -22,6 +22,7 @@ import { ArmAnalyzer } from './pose/ArmAnalyzer.js';
 import { Autopilot, DEMO_SEQUENCE } from './core/Autopilot.js';
 import { RingRush } from './game/RingRush.js';
 import { RingRushUI } from './game/RingRushUI.js';
+import { getBiomeForLevel, applyBiome } from './world/Biomes.js';
 // Mobile imports — loaded lazily to avoid init issues on iOS
 let MobileInput, isMobileDevice, MobileUI;
 import {
@@ -148,10 +149,13 @@ if (urlParams.get('game') !== 'free') {
   ringRush.onRingCollected = () => {
     if (flock) flock.triggerVisit();
   };
-  // Level up → big overlay "LEVEL 2" for a few seconds
+  // Level up → big overlay + biome swap during the flash peak
   ringRush.onLevelUp = (level) => {
-    ringRushUI.showLevelUp(level);
+    const biome = getBiomeForLevel(level);
+    ringRushUI.showLevelUp(level, biome.name);
     if (navigator.vibrate) navigator.vibrate([40, 80, 40]);
+    // Apply roughly at the flash peak so the transition is hidden behind the overlay
+    setTimeout(() => applyBiome(scene, biome, renderer), 500);
   };
   window.__ringRush = ringRush;
 }

@@ -28,11 +28,13 @@ export class RingRushUI {
       <div class="rr-levelup-inner">
         <div class="rr-levelup-label">Level</div>
         <div class="rr-levelup-num" id="rr-levelup-num">2</div>
+        <div class="rr-levelup-biome" id="rr-levelup-biome"></div>
       </div>
     `;
     document.body.appendChild(levelUp);
     this._levelUpEl = levelUp;
     this._levelUpNumEl = document.getElementById('rr-levelup-num');
+    this._levelUpBiomeEl = document.getElementById('rr-levelup-biome');
 
     // Game-over modal
     const modal = document.createElement('div');
@@ -64,8 +66,9 @@ export class RingRushUI {
     });
   }
 
-  showLevelUp(level) {
+  showLevelUp(level, biomeName = '') {
     this._levelUpNumEl.textContent = level;
+    this._levelUpBiomeEl.textContent = biomeName;
     this._levelUpEl.classList.remove('visible');
     // force reflow to restart animation
     void this._levelUpEl.offsetWidth;
