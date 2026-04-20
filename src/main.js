@@ -231,6 +231,8 @@ const autopilot = new Autopilot();
 window.__scene = scene;
 window.__flightState = flightState;
 window.__flightPhysics = flightPhysics;
+window.__renderer = renderer;
+window.__cameraRig = cameraRig;
 window.__startAutopilot = (seq) => {
   if (!flightMode) {
     // Auto-enter flight mode

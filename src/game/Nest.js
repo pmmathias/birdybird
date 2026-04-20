@@ -1,8 +1,13 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /**
  * The home nest — player spawns here, must return here after gathering
  * a stick + a worm. Visible from far away thanks to a subtle upward light beam.
+ *
+ * The chick is loaded as a GLB model (Three.js's Parrot, scaled small and
+ * tinted yellow) with a built-in wing-flap morph animation. Much cuter than
+ * our previous procedural snowman.
  */
 export class Nest {
   constructor(scene, position) {
@@ -14,20 +19,28 @@ export class Nest {
     this.group.position.copy(position);
     scene.add(this.group);
 
+    this._chickMixer = null;
+    this._chickAction = null;
+    this._chickModel = null;
+    // Baby stork — 40% of adult scale. BirdModel uses 0.04 for the player stork.
+    this._chickBaseScale = 0.016;
+    this._chickBaseY = 3.0;
+
     this._build();
+    this._loadChick();
   }
 
   _build() {
-    // Outer twig bowl — a fat torus looks surprisingly nest-like
+    // Outer twig bowl
     const bowl = new THREE.Mesh(
       new THREE.TorusGeometry(5.5, 2.2, 10, 20),
-      new THREE.MeshStandardMaterial({ color: 0x8a5a2a, roughness: 0.95, metalness: 0.0 })
+      new THREE.MeshStandardMaterial({ color: 0x8a5a2a, roughness: 0.95 })
     );
     bowl.rotation.x = Math.PI / 2;
     bowl.position.y = 1.5;
     this.group.add(bowl);
 
-    // Second twig ring offset for depth
+    // Second twig ring for depth
     const bowl2 = new THREE.Mesh(
       new THREE.TorusGeometry(4.8, 1.8, 8, 16),
       new THREE.MeshStandardMaterial({ color: 0x6a4020, roughness: 0.95 })
@@ -36,7 +49,7 @@ export class Nest {
     bowl2.position.y = 2.6;
     this.group.add(bowl2);
 
-    // Inner floor (soft moss)
+    // Inner moss floor
     const floor = new THREE.Mesh(
       new THREE.CircleGeometry(4.5, 16),
       new THREE.MeshStandardMaterial({ color: 0x5a6a2a, roughness: 0.9, side: THREE.DoubleSide })
@@ -45,118 +58,7 @@ export class Nest {
     floor.position.y = 1.8;
     this.group.add(floor);
 
-    // --- Chick: fluffy baby-bird proportions ---
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xfff0a0, roughness: 0.75 });
-    const fluffMat = new THREE.MeshStandardMaterial({ color: 0xfff5c8, roughness: 0.9 });
-    const beakMat = new THREE.MeshStandardMaterial({ color: 0xff8822, roughness: 0.5 });
-    const footMat = new THREE.MeshStandardMaterial({ color: 0xff9933, roughness: 0.6 });
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.25 });
-    const highlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-
-    this.chickGroup = new THREE.Group();
-    this.chickGroup.position.y = 2.0;
-    this.group.add(this.chickGroup);
-
-    // Body — slightly stretched sphere, teardrop-ish
-    const body = new THREE.Mesh(new THREE.SphereGeometry(1.25, 16, 14), bodyMat);
-    body.scale.set(1.05, 1.05, 1.2);
-    body.position.y = 1.25;
-    this.chickGroup.add(body);
-
-    // Down fluff lumps scattered across the back
-    const fluffSpots = [
-      { x: -0.4, y: 1.9, z: -0.5, r: 0.55 },
-      { x:  0.5, y: 2.0, z: -0.3, r: 0.5 },
-      { x:  0.0, y: 2.1, z: -0.6, r: 0.6 },
-      { x: -0.6, y: 1.4, z: -0.7, r: 0.45 },
-      { x:  0.7, y: 1.5, z: -0.6, r: 0.45 },
-    ];
-    for (const s of fluffSpots) {
-      const f = new THREE.Mesh(new THREE.SphereGeometry(s.r, 8, 8), fluffMat);
-      f.position.set(s.x, s.y, s.z);
-      this.chickGroup.add(f);
-    }
-
-    // Tiny stubby wings — flat ellipsoids pressed against the body sides
-    const wingGeo = new THREE.SphereGeometry(0.55, 10, 8);
-    const wingL = new THREE.Mesh(wingGeo, bodyMat);
-    wingL.scale.set(0.4, 0.8, 1.2);
-    wingL.position.set(-0.95, 1.35, 0.05);
-    wingL.rotation.z = 0.15;
-    this.chickGroup.add(wingL);
-    const wingR = wingL.clone();
-    wingR.position.x = 0.95;
-    wingR.rotation.z = -0.15;
-    this.chickGroup.add(wingR);
-    this.wingL = wingL;
-    this.wingR = wingR;
-
-    // Head — big relative to body (baby proportions!)
-    const headGeom = new THREE.SphereGeometry(1.0, 16, 14);
-    const head = new THREE.Mesh(headGeom, bodyMat);
-    head.scale.set(1.0, 0.95, 1.0);
-    head.position.set(0, 2.55, 0.25);
-    this.chickGroup.add(head);
-    this.chickHead = head;
-
-    // Head fluff — three messy tufts on top
-    const tuftPositions = [
-      { x: -0.15, y: 3.25, z: -0.1, r: 0.3 },
-      { x:  0.2, y: 3.3, z: 0.0, r: 0.27 },
-      { x:  0.0, y: 3.4, z: 0.15, r: 0.25 },
-    ];
-    for (const t of tuftPositions) {
-      const tuft = new THREE.Mesh(new THREE.SphereGeometry(t.r, 8, 8), fluffMat);
-      tuft.position.set(t.x, t.y, t.z);
-      this.chickGroup.add(tuft);
-    }
-
-    // Big baby eyes
-    const eyeGeo = new THREE.SphereGeometry(0.18, 10, 10);
-    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-    eyeL.position.set(-0.35, 2.62, 0.88);
-    this.chickGroup.add(eyeL);
-    const eyeR = eyeL.clone();
-    eyeR.position.x = 0.35;
-    this.chickGroup.add(eyeR);
-
-    // Eye highlights — tiny white specks that give the bird "life"
-    const hlGeo = new THREE.SphereGeometry(0.06, 6, 6);
-    const hlL = new THREE.Mesh(hlGeo, highlightMat);
-    hlL.position.set(-0.3, 2.68, 1.01);
-    this.chickGroup.add(hlL);
-    const hlR = hlL.clone();
-    hlR.position.x = 0.4;
-    this.chickGroup.add(hlR);
-
-    // Beak — split in two so we can open it on feed
-    this.beakUpper = new THREE.Mesh(
-      new THREE.ConeGeometry(0.22, 0.55, 6),
-      beakMat
-    );
-    this.beakUpper.rotation.x = Math.PI / 2;
-    this.beakUpper.position.set(0, 2.48, 1.1);
-    this.chickGroup.add(this.beakUpper);
-
-    this.beakLower = new THREE.Mesh(
-      new THREE.ConeGeometry(0.22, 0.5, 6),
-      beakMat
-    );
-    this.beakLower.rotation.x = Math.PI / 2;
-    this.beakLower.position.set(0, 2.35, 1.08);
-    this.chickGroup.add(this.beakLower);
-
-    // Little orange feet peeking out from the body
-    const footGeo = new THREE.SphereGeometry(0.16, 8, 6);
-    const footL = new THREE.Mesh(footGeo, footMat);
-    footL.scale.set(1.3, 0.55, 1.1);
-    footL.position.set(-0.35, 0.15, 0.35);
-    this.chickGroup.add(footL);
-    const footR = footL.clone();
-    footR.position.x = 0.35;
-    this.chickGroup.add(footR);
-
-    // Orientation beacon — soft upward light column, visible from afar
+    // Orientation beacon — upward light column, visible from altitude
     const beam = new THREE.Mesh(
       new THREE.CylinderGeometry(1.2, 0.3, 200, 12, 1, true),
       new THREE.MeshBasicMaterial({
@@ -172,47 +74,86 @@ export class Nest {
     this.group.add(beam);
     this.beam = beam;
 
-    // Point light for nighttime biomes
+    // Point light — makes the nest glow through night biomes
     const glow = new THREE.PointLight(0x88ddff, 2.0, 300, 1.3);
     glow.position.y = 8;
     this.group.add(glow);
   }
 
+  _loadChick() {
+    const loader = new GLTFLoader();
+    loader.load(
+      'models/Stork.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        model.scale.setScalar(this._chickBaseScale);
+        model.position.set(0, this._chickBaseY, 0);
+        model.rotation.y = Math.PI;
+
+        // Force pale-yellow baby colouring — aggressive override:
+        // replace material entirely so texture maps + vertex colors can't bleed through.
+        model.traverse((o) => {
+          if (o.isMesh) {
+            o.material = new THREE.MeshStandardMaterial({
+              color: 0xffe0a0,
+              roughness: 0.85,
+              metalness: 0.0,
+              envMapIntensity: 0.4,
+            });
+          }
+        });
+
+        this._chickModel = model;
+        this.group.add(model);
+
+        // Freeze the wings at a folded-in pose — a chick in the nest shouldn't flap.
+        // We create the mixer but leave action stopped at time≈0.95 (wings tucked).
+        if (gltf.animations && gltf.animations[0]) {
+          this._chickMixer = new THREE.AnimationMixer(model);
+          this._chickAction = this._chickMixer.clipAction(gltf.animations[0]);
+          this._chickAction.play();
+          this._chickAction.time = 0.95;
+          this._chickAction.timeScale = 0; // paused
+          this._chickMixer.update(0);
+        }
+      },
+      undefined,
+      (err) => console.warn('Nest: chick GLB load failed', err)
+    );
+  }
+
   update(dt, t) {
-    // Chick idly sways and looks around
-    if (this.chickGroup) {
-      this.chickGroup.rotation.y = Math.sin(t * 0.7) * 0.25;
-      this.chickGroup.position.y = 2.0 + Math.sin(t * 2.2) * 0.05;
+    if (this._chickMixer) this._chickMixer.update(dt);
+
+    if (this._chickModel) {
+      // Gentle idle bob
+      this._chickModel.position.y = this._chickBaseY + Math.sin(t * 1.6) * 0.1;
+      // Occasional head-turn
+      this._chickModel.rotation.y = Math.PI + Math.sin(t * 0.6) * 0.25;
     }
-    if (this.chickHead) {
-      this.chickHead.rotation.z = Math.sin(t * 1.3) * 0.1;
-    }
-    // Wings twitch occasionally
-    if (this.wingL && this.wingR) {
-      const twitch = Math.max(0, Math.sin(t * 0.9));
-      this.wingL.rotation.z = 0.15 - twitch * 0.1;
-      this.wingR.rotation.z = -0.15 + twitch * 0.1;
-    }
-    // Beam slowly pulses
+
     if (this.beam) {
       this.beam.material.opacity = 0.14 + Math.sin(t * 1.1) * 0.05;
     }
   }
 
-  /** Trigger a 'beak open — chirp' animation (call on worm feed / win). */
-  openBeak(durationMs = 400) {
-    if (!this.beakLower) return;
+  /** Quick 'chirp' animation on feed / win — speeds up the flap + tiny scale pop. */
+  openBeak(durationMs = 500) {
+    if (!this._chickModel || !this._chickAction) return;
+    const origTimeScale = this._chickAction.timeScale;
+    const origScale = this._chickBaseScale;
+    this._chickAction.timeScale = 2.5;
+
     const start = performance.now();
     const anim = () => {
       const p = (performance.now() - start) / durationMs;
       if (p >= 1) {
-        this.beakLower.position.y = 2.35;
-        this.beakLower.rotation.x = Math.PI / 2;
+        this._chickAction.timeScale = origTimeScale;
+        this._chickModel.scale.setScalar(origScale);
         return;
       }
       const wave = Math.sin(p * Math.PI); // 0 → 1 → 0
-      this.beakLower.rotation.x = Math.PI / 2 + wave * 0.7;
-      this.beakLower.position.y = 2.35 - wave * 0.18;
+      this._chickModel.scale.setScalar(origScale * (1 + wave * 0.15));
       requestAnimationFrame(anim);
     };
     anim();
