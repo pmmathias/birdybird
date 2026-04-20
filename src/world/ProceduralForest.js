@@ -4,12 +4,12 @@ import { getTerrainHeight } from './Terrain.js';
 import { WORLD_HALF, WATER_LEVEL } from '../constants.js';
 
 /**
- * Clean-room proof-of-concept: procedural L-system forest with instanced rendering.
+ * Procedural L-system forest with instanced rendering.
  *
- * Architecture inspired by red-reddington's discourse.threejs.org post
- * (https://discourse.threejs.org/t/procedural-instanced-forest-high-performance-real-trees/88610)
- * — his code is NOT used here. We describe the same idea (L-system branching +
- * instanced draw + merged-geometry-per-species) and write it ourselves.
+ * Architecture inspired by red-reddington (https://codepen.io/the-red-reddington)
+ * — thread: https://discourse.threejs.org/t/procedural-instanced-forest-high-performance-real-trees/88610
+ * Author granted MIT permission for reuse, and also offered kind feedback on
+ * birdybird. Thank you!
  *
  * Per tree species we produce:
  *   - one merged BufferGeometry for all bark cylinders
