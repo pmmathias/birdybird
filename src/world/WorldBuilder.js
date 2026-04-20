@@ -102,8 +102,10 @@ export function buildWorld(scene, renderer) {
   }
 
   // --- Forest (placed AFTER houses, excludes tree positions near buildings) ---
-  // ?forest=proc enables the clean-room procedural L-system forest PoC.
-  const useProcForest = new URLSearchParams(location.search).get('forest') === 'proc';
+  // Default: procedural L-system instanced forest (attribution: red-reddington,
+  // MIT). Legacy sprite forest still available via ?forest=sprite for A/B.
+  const forestMode = new URLSearchParams(location.search).get('forest') || 'proc';
+  const useProcForest = forestMode !== 'sprite';
   console.time('Forest');
   let forest = useProcForest
     ? createProceduralForest(arcs, { count: IS_MOBILE ? 700 : 1400 })
