@@ -69,13 +69,13 @@ export const MAX_PITCH = 0.7;            // ~40° max pitch
 
 // Flight modes
 export const FLIGHT_MODE = { FLYING: 0, LANDING: 1, GROUNDED: 2, TAKEOFF: 3 };
-export const WALK_SPEED = 2.0;              // m/s max walking speed
+export const WALK_SPEED = 5.0;              // m/s max walking speed
 export const LANDING_SPEED_THRESHOLD = 14;  // m/s — below this + near ground → land
 export const LANDING_ALTITUDE_MARGIN = 4.0; // meters above terrain to trigger landing
 export const TAKEOFF_IMPULSE = 15;          // m/s upward kick on takeoff
 export const TAKEOFF_DURATION = 0.5;        // seconds of takeoff animation
 export const GROUND_OFFSET = 3.0;           // meters above terrain when grounded
-export const WALK_SPRINT_SPEED = 5.0;       // m/s sprint speed
+export const WALK_SPRINT_SPEED = 10.0;      // m/s sprint speed
 export const JUMP_IMPULSE = 6.0;            // m/s upward kick for ground jump
 export const GROUND_EFFECT_HEIGHT = 5.0;    // meters — ground effect zone
 
@@ -103,7 +103,7 @@ export const RINGS_PER_LEVEL = 1;              // TEMP tuning (debug) — revert
 
 // --- Nest Quest gameplay ---
 export const NEST_QUEST_START_SECONDS = 300;   // 5 minutes to find materials and return
-export const NEST_WIN_DISTANCE = 40;           // m from nest to complete the quest
+export const NEST_WIN_DISTANCE = 15;           // m from nest — close enough to actually see the chick
 export const STICK_TREE_COUNT = 10;            // glowing trees distributed across the world
 export const STICK_COLLECT_RADIUS = 15;
 export const STICKS_REQUIRED = 1;              // MVP: one stick is enough

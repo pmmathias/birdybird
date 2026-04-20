@@ -18,10 +18,14 @@ const HIGHSCORE_KEY = 'birdybird.nestquest.highscore';
  * Score = remaining seconds + ring-bonus-count (rings collected on the side).
  */
 export class NestQuest {
-  constructor(scene, world, flightState) {
+  constructor(scene, world, flightState, options = {}) {
     this.scene = scene;
     this.world = world;
     this.flightState = flightState;
+
+    this.level = options.startLevel || 1;
+    this.sticksRequired = STICKS_REQUIRED + (this.level - 1);
+    this.wormsRequired = WORMS_REQUIRED + (this.level - 1);
 
     this.timer = NEST_QUEST_START_SECONDS;
     this.sticks = 0;
@@ -31,6 +35,7 @@ export class NestQuest {
     this.won = false;                      // returned to nest after complete
     this.gameOver = false;                 // timer ran out or win
     this.finalScore = 0;
+    this.totalScore = 0;                   // accumulates across levels in a run
     this.highscore = parseInt(localStorage.getItem(HIGHSCORE_KEY), 10) || 0;
 
     this._started = false;
@@ -46,6 +51,7 @@ export class NestQuest {
     this.onWin = null;
     this.onGameOver = null;
     this.onChirp = null; // fired occasionally when player is within earshot of the nest
+    this.onLevelUp = null; // fired when a new level starts (level number)
 
     this._chirpCooldown = 4; // first chirp ~4s after start
 
@@ -173,7 +179,7 @@ export class NestQuest {
     }
 
     // Stick pickup
-    if (this.sticks < STICKS_REQUIRED) {
+    if (this.sticks < this.sticksRequired) {
       for (const tree of this.stickTrees) {
         if (tree.harvested) continue;
         if (birdPos.distanceTo(tree.position.clone().setY(tree.position.y + 12)) < STICK_COLLECT_RADIUS + 8) {
@@ -182,13 +188,13 @@ export class NestQuest {
           this.bursts.push(new RingBurst(this.scene, tree.position.clone().setY(tree.position.y + 12), 0xff6633));
           if (navigator.vibrate) navigator.vibrate(35);
           if (this.onStickCollected) this.onStickCollected();
-          if (this.sticks >= STICKS_REQUIRED && this.worms >= WORMS_REQUIRED) this._onQuestComplete();
+          if (this.sticks >= this.sticksRequired && this.worms >= this.wormsRequired) this._onQuestComplete();
         }
       }
     }
 
     // Worm pickup — only when flying low enough
-    if (this.worms < WORMS_REQUIRED) {
+    if (this.worms < this.wormsRequired) {
       for (let i = this.worms_list.length - 1; i >= 0; i--) {
         const worm = this.worms_list[i];
         if (worm.collected) continue;
@@ -201,7 +207,7 @@ export class NestQuest {
           this.worms++;
           if (navigator.vibrate) navigator.vibrate(35);
           if (this.onWormCollected) this.onWormCollected();
-          if (this.sticks >= STICKS_REQUIRED && this.worms >= WORMS_REQUIRED) this._onQuestComplete();
+          if (this.sticks >= this.sticksRequired && this.worms >= this.wormsRequired) this._onQuestComplete();
         }
       }
     }
@@ -227,9 +233,11 @@ export class NestQuest {
   _onWin() {
     this.won = true;
     const remaining = Math.ceil(this.timer);
-    this.finalScore = remaining + this.rings * 10;
-    if (this.finalScore > this.highscore) {
-      this.highscore = this.finalScore;
+    const levelScore = remaining + this.rings * 10 + this.level * 50;
+    this.finalScore = levelScore;
+    this.totalScore += levelScore;
+    if (this.totalScore > this.highscore) {
+      this.highscore = this.totalScore;
       localStorage.setItem(HIGHSCORE_KEY, String(this.highscore));
     }
     // Trigger chick celebration animation (wings flap, worm appears, chirps)
@@ -263,6 +271,10 @@ export class NestQuest {
     for (const b of this.bursts) b.dispose();
     this.bursts = [];
 
+    this.level = 1;
+    this.sticksRequired = STICKS_REQUIRED;
+    this.wormsRequired = WORMS_REQUIRED;
+    this.totalScore = 0;
     this.timer = NEST_QUEST_START_SECONDS;
     this.sticks = 0;
     this.worms = 0;
@@ -278,5 +290,36 @@ export class NestQuest {
 
     this._spawnStickTrees();
     this._spawnWorms();
+  }
+
+  /**
+   * Advance to the next level: +1 stick, +1 worm, fresh timer,
+   * new spawns. Caller (main.js) handles biome change separately.
+   */
+  nextLevel() {
+    this.level++;
+    this.sticksRequired = STICKS_REQUIRED + (this.level - 1);
+    this.wormsRequired = WORMS_REQUIRED + (this.level - 1);
+
+    for (const w of this.worms_list) w.dispose();
+    for (const t of this.stickTrees) t.dispose();
+    for (const b of this.bursts) b.dispose();
+    this.bursts = [];
+
+    this.timer = NEST_QUEST_START_SECONDS;
+    this.sticks = 0;
+    this.worms = 0;
+    this.rings = 0;
+    this.questComplete = false;
+    this.won = false;
+    this.gameOver = false;
+    this.finalScore = 0;
+    this._started = true;
+    this._gracePeriod = 2.0;
+    this._leftNest = false;
+
+    this._spawnStickTrees();
+    this._spawnWorms();
+    if (this.onLevelUp) this.onLevelUp(this.level);
   }
 }

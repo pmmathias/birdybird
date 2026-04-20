@@ -3,9 +3,10 @@
  * Hidden until game starts. Shows timer, sticks, worms, rings.
  */
 export class NestQuestUI {
-  constructor(nestQuest, onRestart) {
+  constructor(nestQuest, onRestart, onNextLevel) {
     this.nq = nestQuest;
     this.onRestart = onRestart;
+    this.onNextLevel = onNextLevel || null;
     this._modalShown = false;
     this._lastSticks = 0;
     this._lastWorms = 0;
@@ -17,6 +18,7 @@ export class NestQuestUI {
     hud.id = 'nq-hud';
     hud.innerHTML = `
       <div class="nq-timer"><span id="nq-time">5:00</span></div>
+      <div class="nq-level">Level <b id="nq-level">1</b></div>
       <div class="nq-inv">
         <span class="nq-slot" id="nq-slot-stick">🪵 <b id="nq-sticks">0</b>/<b id="nq-sticks-need">1</b></span>
         <span class="nq-slot" id="nq-slot-worm">🪱 <b id="nq-worms">0</b>/<b id="nq-worms-need">1</b></span>
@@ -45,6 +47,7 @@ export class NestQuestUI {
         <div class="nq-result-label">final score</div>
         <div class="nq-best"><span>Best</span><span id="nq-mod-best">0</span></div>
         <div class="nq-breakdown" id="nq-mod-breakdown"></div>
+        <button class="nq-retry" id="nq-next" style="display:none">Next level →</button>
         <button class="nq-retry" id="nq-retry">Try again</button>
       </div>
     `;
@@ -53,6 +56,10 @@ export class NestQuestUI {
     document.getElementById('nq-retry').addEventListener('click', () => {
       this._hideModal();
       this.onRestart();
+    });
+    document.getElementById('nq-next').addEventListener('click', () => {
+      this._hideModal();
+      if (this.onNextLevel) this.onNextLevel();
     });
   }
 
@@ -74,9 +81,12 @@ export class NestQuestUI {
     this._sticksEl.textContent = nq.sticks;
     this._wormsEl.textContent = nq.worms;
     this._ringsEl.textContent = nq.rings;
+    this._sticksNeedEl.textContent = nq.sticksRequired;
+    this._wormsNeedEl.textContent = nq.wormsRequired;
+    document.getElementById('nq-level').textContent = nq.level;
 
-    this._slotStick.classList.toggle('done', nq.sticks >= parseInt(this._sticksNeedEl.textContent, 10));
-    this._slotWorm.classList.toggle('done', nq.worms >= parseInt(this._wormsNeedEl.textContent, 10));
+    this._slotStick.classList.toggle('done', nq.sticks >= nq.sticksRequired);
+    this._slotWorm.classList.toggle('done', nq.worms >= nq.wormsRequired);
 
     // Pulse inventory slot on pickup
     if (nq.sticks > this._lastSticks) { this._pulse(this._slotStick); this._lastSticks = nq.sticks; }
@@ -109,17 +119,23 @@ export class NestQuestUI {
 
   _showModal() {
     const nq = this.nq;
-    document.getElementById('nq-mod-title').textContent = nq.won ? 'You made it home!' : 'Time ran out';
-    document.getElementById('nq-mod-score').textContent = nq.won ? nq.finalScore : 0;
+    const nextBtn = document.getElementById('nq-next');
+    document.getElementById('nq-mod-title').textContent = nq.won
+      ? `Level ${nq.level} complete!`
+      : 'Time ran out';
+    document.getElementById('nq-mod-score').textContent = nq.won ? nq.totalScore : 0;
     document.getElementById('nq-mod-best').textContent = nq.highscore;
     const breakdown = document.getElementById('nq-mod-breakdown');
     if (nq.won) {
       const remaining = Math.ceil(nq.timer);
-      breakdown.innerHTML = `${remaining}s remaining + ${nq.rings} rings × 10 = <b>${nq.finalScore}</b>`;
+      breakdown.innerHTML = `L${nq.level}: ${remaining}s + ${nq.rings}💍 + ${nq.level * 50} bonus = <b>${nq.finalScore}</b>`;
+      nextBtn.style.display = '';
+      nextBtn.textContent = `Level ${nq.level + 1} → ${nq.sticksRequired + 1} 🪵 + ${nq.wormsRequired + 1} 🪱`;
     } else {
       breakdown.innerHTML = nq.questComplete
         ? 'You had everything but didn\'t reach the nest in time.'
         : `You collected ${nq.sticks} stick${nq.sticks === 1 ? '' : 's'} and ${nq.worms} worm${nq.worms === 1 ? '' : 's'}.`;
+      nextBtn.style.display = 'none';
     }
     this._modal.classList.add('visible');
   }

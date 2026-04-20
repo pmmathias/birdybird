@@ -198,8 +198,14 @@ if (gameMode === 'ringrush') {
   }
 } else if (gameMode === 'nest') {
   // Nest Quest: find a stick + a worm, return to the nest. Rings on the side.
-  nestQuest = new NestQuest(scene, world, flightState);
-  nestQuestUI = new NestQuestUI(nestQuest, () => nestQuest.restart());
+  const nqOptions = {};
+  if (urlParams.has('level')) nqOptions.startLevel = parseInt(urlParams.get('level'), 10) || 1;
+  nestQuest = new NestQuest(scene, world, flightState, nqOptions);
+  nestQuestUI = new NestQuestUI(
+    nestQuest,
+    () => nestQuest.restart(),
+    () => nestQuest.nextLevel(),
+  );
   nestQuest.onStickCollected = () => { if (flock) flock.triggerVisit(); sfx.stickPickup(); };
   nestQuest.onWormCollected = () => { if (flock) flock.triggerVisit(); sfx.wormPickup(); };
   nestQuest.onQuestComplete = () => { nestQuestUI.flashQuestComplete(); sfx.questComplete(); };
@@ -208,7 +214,22 @@ if (gameMode === 'ringrush') {
     if (won) sfx.winFanfare();
     else sfx.loseToot();
   };
+  nestQuest.onLevelUp = (level) => {
+    const biome = getBiomeForLevel(level);
+    applyBiome(scene, biome, renderer);
+    if (biome.forest && world.regenerateForest) world.regenerateForest(biome.forest);
+    if (navigator.vibrate) navigator.vibrate([40, 80, 40]);
+  };
   window.__nestQuest = nestQuest;
+
+  // If entering via ?level=N URL, apply the matching biome immediately
+  if (nestQuest.level > 1) {
+    const biome = getBiomeForLevel(nestQuest.level);
+    setTimeout(() => {
+      applyBiome(scene, biome, renderer);
+      if (biome.forest && world.regenerateForest) world.regenerateForest(biome.forest);
+    }, 0);
+  }
 
   // Side-rings: ring spawner runs without its own timer/level/game-over.
   // Auto-start so collisions are active immediately — no calibration gate here.
@@ -405,8 +426,11 @@ loop.onUpdate((dt) => {
     let groundInput = null;
 
     if (mode === FLIGHT_MODE.GROUNDED) {
-      // Ground controls: WASD movement, arrows turn, space jump, shift sprint
-      groundInput = input.getGroundInput();
+      // Ground controls: desktop = arrows/WASD, mobile = tilt (pitch/roll) + shake-to-takeoff
+      const mobileTilt = (mobileInput && mobileInput.active)
+        ? { pitch: mobileInput.pitch, roll: mobileInput.roll }
+        : null;
+      groundInput = input.getGroundInput(mobileTilt);
       // Flap (Space / shake / gesture) → takeoff
       if (input.lift > 0.5) {
         flightPhysics.takeoff();

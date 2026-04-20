@@ -99,17 +99,29 @@ export class InputManager {
 
   /**
    * Ground movement input (WASD + arrows + space + shift).
-   * W/S = forward/back, A/D = strafe, Arrows L/R = turn, Space = jump, Shift = sprint.
+   * Desktop: Arrows/WASD = walk (run-speed), Shift = sprint (2× walk).
+   * Mobile: pass mobileTilt={pitch,roll} → walk via tilt (no strafe needed).
    */
-  getGroundInput() {
-    let forward = 0, strafe = 0, turn = 0;
+  getGroundInput(mobileTilt = null) {
+    let forward = 0, strafe = 0, turn = 0, sprint = false;
+
+    if (mobileTilt) {
+      // Tilt-based walking: phone away from you = forward, toward you = backward,
+      // tilt left/right = turn. Stronger tilt = sprint.
+      forward = -mobileTilt.pitch; // flight: pitch>0 = climb = lean back. ground: lean back = walk forward (toward user)
+      turn = mobileTilt.roll;
+      const tiltMag = Math.max(Math.abs(mobileTilt.pitch), Math.abs(mobileTilt.roll));
+      sprint = tiltMag > 0.6;
+      return { forward, strafe: 0, turn, sprint };
+    }
+
     if (this._keys['KeyW'] || this._keys['ArrowUp']) forward = 1;
     if (this._keys['KeyS'] || this._keys['ArrowDown']) forward = -1;
     if (this._keys['KeyA']) strafe = 1;
     if (this._keys['KeyD']) strafe = -1;
     if (this._keys['ArrowLeft']) turn = 1;
     if (this._keys['ArrowRight']) turn = -1;
-    const sprint = this._keys['ShiftLeft'] || this._keys['ShiftRight'];
+    sprint = !!(this._keys['ShiftLeft'] || this._keys['ShiftRight']);
     return { forward, strafe, turn, sprint };
   }
 }

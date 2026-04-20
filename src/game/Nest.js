@@ -22,9 +22,10 @@ export class Nest {
     this._chickMixer = null;
     this._chickAction = null;
     this._chickModel = null;
-    // Baby stork — 40% of adult scale. BirdModel uses 0.04 for the player stork.
-    this._chickBaseScale = 0.016;
-    this._chickBaseY = 3.0;
+    // Baby stork — 75% of adult scale. BirdModel uses 0.04 for the player stork.
+    this._chickBaseScale = 0.03;
+    this._chickBaseY = 2.6;
+    this._hopT = Math.random() * 2; // desynchronize hops across sessions
 
     this._build();
     this._loadChick();
@@ -88,18 +89,20 @@ export class Nest {
         const model = gltf.scene;
         model.scale.setScalar(this._chickBaseScale);
         model.position.set(0, this._chickBaseY, 0);
+        // Upright standing pose. The BirdModel sets yaw via lookAt then does
+        // rotateX(-0.95) in local frame. Using Euler rotation here we need the
+        // opposite sign because Euler.XYZ applies X first in the parent frame.
+        model.rotation.order = 'YXZ';
         model.rotation.y = Math.PI;
+        model.rotation.x = -0.95;
 
-        // Force pale-yellow baby colouring — aggressive override:
-        // replace material entirely so texture maps + vertex colors can't bleed through.
+        // Keep original Stork textures — no material override.
+        // Only disable env-map dependency for consistent mobile look.
         model.traverse((o) => {
-          if (o.isMesh) {
-            o.material = new THREE.MeshStandardMaterial({
-              color: 0xffe0a0,
-              roughness: 0.85,
-              metalness: 0.0,
-              envMapIntensity: 0.4,
-            });
+          if (o.isMesh && o.material) {
+            o.material.envMap = null;
+            if (o.material.metalness !== undefined) o.material.metalness = 0;
+            o.material.needsUpdate = true;
           }
         });
 
@@ -126,10 +129,34 @@ export class Nest {
     if (this._chickMixer) this._chickMixer.update(dt);
 
     if (this._chickModel) {
-      // Gentle idle bob
-      this._chickModel.position.y = this._chickBaseY + Math.sin(t * 1.6) * 0.1;
+      this._hopT += dt;
+      // Hop cycle: ~0.55s airborne (parabolic), then ~0.8s idle. Repeats.
+      const period = 1.35;
+      const air = 0.55;
+      const phase = this._hopT % period;
+      let yOff = 0;
+      let squash = 1;
+      let stretch = 1;
+      if (phase < air) {
+        const p = phase / air; // 0→1
+        yOff = Math.sin(p * Math.PI) * 1.2; // peak ≈1.2m above base
+        stretch = 1 + Math.sin(p * Math.PI) * 0.08;
+      } else {
+        const p = (phase - air) / (period - air); // 0→1 on ground
+        if (p < 0.18) {
+          const q = 1 - p / 0.18;
+          squash = 1 - q * 0.18; // brief squash on landing
+          stretch = 1 + q * 0.05;
+        }
+      }
+      this._chickModel.position.y = this._chickBaseY + yOff;
+      this._chickModel.scale.set(
+        this._chickBaseScale * squash,
+        this._chickBaseScale * stretch,
+        this._chickBaseScale * squash,
+      );
       // Occasional head-turn
-      this._chickModel.rotation.y = Math.PI + Math.sin(t * 0.6) * 0.25;
+      this._chickModel.rotation.y = Math.PI + Math.sin(t * 0.6) * 0.2;
     }
 
     if (this.beam) {
@@ -137,26 +164,14 @@ export class Nest {
     }
   }
 
-  /** Quick 'chirp' animation — speeds up the flap + tiny scale pop. */
+  /** Quick 'chirp' animation — briefly speeds up the wing-flap cycle. */
   openBeak(durationMs = 500) {
-    if (!this._chickModel || !this._chickAction) return;
+    if (!this._chickAction) return;
     const origTimeScale = this._chickAction.timeScale;
-    const origScale = this._chickBaseScale;
     this._chickAction.timeScale = 2.5;
-
-    const start = performance.now();
-    const anim = () => {
-      const p = (performance.now() - start) / durationMs;
-      if (p >= 1) {
-        this._chickAction.timeScale = origTimeScale;
-        this._chickModel.scale.setScalar(origScale);
-        return;
-      }
-      const wave = Math.sin(p * Math.PI); // 0 → 1 → 0
-      this._chickModel.scale.setScalar(origScale * (1 + wave * 0.15));
-      requestAnimationFrame(anim);
-    };
-    anim();
+    setTimeout(() => {
+      if (this._chickAction) this._chickAction.timeScale = origTimeScale;
+    }, durationMs);
   }
 
   /**
