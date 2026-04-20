@@ -3,6 +3,7 @@ import { createTerrain } from './Terrain.js';
 import { createWaterPlane } from './WaterPlane.js';
 import { createCloudLayer } from './CloudPlane.js';
 import { createForest } from './ForestPlacer.js';
+import { createProceduralForest } from './ProceduralForest.js';
 import { createLandmark } from './Landmarks.js';
 import { createHouses } from './HousePlacer.js';
 import { createHotelResorts } from './HotelResort.js';
@@ -101,8 +102,12 @@ export function buildWorld(scene, renderer) {
   }
 
   // --- Forest (placed AFTER houses, excludes tree positions near buildings) ---
+  // ?forest=proc enables the clean-room procedural L-system forest PoC.
+  const useProcForest = new URLSearchParams(location.search).get('forest') === 'proc';
   console.time('Forest');
-  let forest = createForest(arcs, housePositions);
+  let forest = useProcForest
+    ? createProceduralForest(arcs, { count: IS_MOBILE ? 700 : 1400 })
+    : createForest(arcs, housePositions);
   scene.add(forest);
   console.timeEnd('Forest');
 
@@ -121,7 +126,12 @@ export function buildWorld(scene, renderer) {
         }
       });
     }
-    forest = createForest(arcs, housePositions, biomeForestOptions);
+    forest = useProcForest
+      ? createProceduralForest(arcs, {
+          count: IS_MOBILE ? 700 : 1400,
+          presets: biomeForestOptions.types || ['oak', 'pine', 'birch', 'bush'],
+        })
+      : createForest(arcs, housePositions, biomeForestOptions);
     scene.add(forest);
   }
 
