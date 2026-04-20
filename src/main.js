@@ -25,6 +25,7 @@ import { RingRushUI } from './game/RingRushUI.js';
 import { NestQuest } from './game/NestQuest.js';
 import { NestQuestUI } from './game/NestQuestUI.js';
 import { getBiomeForLevel, applyBiome } from './world/Biomes.js';
+import { SoundFX } from './audio/SoundFX.js';
 // Mobile imports — MobileInput class stays lazy, but detect mobile synchronously
 // so desktop-only init (ringRush.start, initWebcam) doesn't fire on iPhones.
 let MobileInput, MobileUI;
@@ -143,6 +144,20 @@ const isMobile = isMobileDevice(); // synchronous — see top of file
 })();
 const hud = new HUD();
 
+// --- Audio ---
+const sfx = new SoundFX();
+window.__sfx = sfx;
+// Unlock audio context on first user gesture (iOS Safari requirement)
+const unlockAudio = () => {
+  sfx.unlock();
+  document.removeEventListener('pointerdown', unlockAudio);
+  document.removeEventListener('touchstart', unlockAudio);
+  document.removeEventListener('keydown', unlockAudio);
+};
+document.addEventListener('pointerdown', unlockAudio);
+document.addEventListener('touchstart', unlockAudio);
+document.addEventListener('keydown', unlockAudio);
+
 // --- Game mode selection ---
 // ?game=nest (default) | ringrush | free
 const gameMode = urlParams.get('game') || 'nest';
@@ -185,15 +200,13 @@ if (gameMode === 'ringrush') {
   // Nest Quest: find a stick + a worm, return to the nest. Rings on the side.
   nestQuest = new NestQuest(scene, world, flightState);
   nestQuestUI = new NestQuestUI(nestQuest, () => nestQuest.restart());
-  nestQuest.onStickCollected = () => { if (flock) flock.triggerVisit(); };
-  nestQuest.onWormCollected = () => { if (flock) flock.triggerVisit(); };
-  nestQuest.onQuestComplete = () => { nestQuestUI.flashQuestComplete(); };
+  nestQuest.onStickCollected = () => { if (flock) flock.triggerVisit(); sfx.stickPickup(); };
+  nestQuest.onWormCollected = () => { if (flock) flock.triggerVisit(); sfx.wormPickup(); };
+  nestQuest.onQuestComplete = () => { nestQuestUI.flashQuestComplete(); sfx.questComplete(); };
+  nestQuest.onChirp = (volumeScale) => sfx.chirp(volumeScale);
   nestQuest.onGameOver = (won) => {
-    if (won && nestQuest.nest) {
-      // Happy chick — opens its beak twice like it's chirping for the worm
-      nestQuest.nest.openBeak(500);
-      setTimeout(() => nestQuest.nest.openBeak(500), 650);
-    }
+    if (won) sfx.winFanfare();
+    else sfx.loseToot();
   };
   window.__nestQuest = nestQuest;
 
@@ -205,6 +218,7 @@ if (gameMode === 'ringrush') {
   sideRings.onRingCollected = () => {
     nestQuest.registerRingPickup();
     if (flock) flock.triggerVisit();
+    sfx.ringDing();
   };
   window.__sideRings = sideRings;
   ringRush = sideRings; // reuse the ringRush update-loop slot

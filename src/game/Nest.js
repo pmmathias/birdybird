@@ -137,7 +137,7 @@ export class Nest {
     }
   }
 
-  /** Quick 'chirp' animation on feed / win — speeds up the flap + tiny scale pop. */
+  /** Quick 'chirp' animation — speeds up the flap + tiny scale pop. */
   openBeak(durationMs = 500) {
     if (!this._chickModel || !this._chickAction) return;
     const origTimeScale = this._chickAction.timeScale;
@@ -157,6 +157,61 @@ export class Nest {
       requestAnimationFrame(anim);
     };
     anim();
+  }
+
+  /**
+   * Win celebration: wings flap properly, a wiggly worm appears at the chick's
+   * beak and gets devoured, two chirps, the chick bounces in place.
+   */
+  celebrate() {
+    if (this._chickAction) {
+      this._chickAction.timeScale = 3.0;
+      setTimeout(() => { if (this._chickAction) this._chickAction.timeScale = 0; }, 2800);
+    }
+
+    // Wriggly worm appears in front of the beak, then shrinks into nothing
+    // (chick "swallows" it). Position is in nest-local space.
+    const wormGeom = new THREE.CapsuleGeometry(0.22, 0.9, 5, 8);
+    const wormMat = new THREE.MeshStandardMaterial({
+      color: 0xee6699,
+      emissive: 0xff5599,
+      emissiveIntensity: 1.4,
+      roughness: 0.5,
+    });
+    const worm = new THREE.Mesh(wormGeom, wormMat);
+    worm.rotation.z = Math.PI / 2;
+    const startZ = 1.2;   // in front of chick
+    const endZ = 0.1;     // at chick's beak
+    worm.position.set(0, this._chickBaseY + 0.3, startZ);
+    this.group.add(worm);
+
+    const wormStart = performance.now();
+    const WORM_DURATION = 1400;
+    const animWorm = () => {
+      const p = (performance.now() - wormStart) / WORM_DURATION;
+      if (p >= 1) {
+        this.group.remove(worm);
+        worm.geometry.dispose();
+        worm.material.dispose();
+        return;
+      }
+      if (p < 0.6) {
+        // worm floats toward beak with a wiggle
+        const q = p / 0.6;
+        worm.position.z = startZ + (endZ - startZ) * q;
+        worm.rotation.y = Math.sin(p * 20) * 0.3;
+      } else {
+        // shrink away (eaten)
+        const q = (p - 0.6) / 0.4;
+        worm.scale.setScalar(1 - q);
+      }
+      requestAnimationFrame(animWorm);
+    };
+    animWorm();
+
+    // Two triumphant chirps
+    setTimeout(() => this.openBeak(300), 150);
+    setTimeout(() => this.openBeak(300), 520);
   }
 
   dispose() {

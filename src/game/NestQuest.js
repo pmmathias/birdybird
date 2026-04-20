@@ -45,6 +45,9 @@ export class NestQuest {
     this.onQuestComplete = null;
     this.onWin = null;
     this.onGameOver = null;
+    this.onChirp = null; // fired occasionally when player is within earshot of the nest
+
+    this._chirpCooldown = 4; // first chirp ~4s after start
 
     // Nest at spawn position
     const nestPos = flightState.position.clone();
@@ -147,6 +150,20 @@ export class NestQuest {
       this.timer -= dt;
     }
 
+    // Ambient chirp from the nest — gets louder as you approach, silent far away.
+    this._chirpCooldown -= dt;
+    if (this._chirpCooldown <= 0) {
+      if (this.onChirp) {
+        const dist = this.flightState.position.distanceTo(this.nest.position);
+        const maxAudible = 1400;
+        if (dist < maxAudible) {
+          const volumeScale = 1 - dist / maxAudible;
+          this.onChirp(volumeScale * volumeScale); // squared → falls off quicker
+        }
+      }
+      this._chirpCooldown = 2.5 + Math.random() * 2.5;
+    }
+
     const birdPos = this.flightState.position;
 
     // Leaving the nest unlocks the return condition
@@ -214,6 +231,19 @@ export class NestQuest {
     if (this.finalScore > this.highscore) {
       this.highscore = this.finalScore;
       localStorage.setItem(HIGHSCORE_KEY, String(this.highscore));
+    }
+    // Trigger chick celebration animation (wings flap, worm appears, chirps)
+    this.nest.celebrate();
+    // Gold sparkle bursts around the nest
+    for (let i = 0; i < 5; i++) {
+      setTimeout(() => {
+        const angle = (i / 5) * Math.PI * 2;
+        const pos = this.nest.position.clone();
+        pos.x += Math.cos(angle) * 3;
+        pos.z += Math.sin(angle) * 3;
+        pos.y += 5;
+        this.bursts.push(new RingBurst(this.scene, pos, 0xffdd44));
+      }, i * 180);
     }
     this._onGameOver(true);
   }
