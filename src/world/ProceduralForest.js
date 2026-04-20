@@ -116,16 +116,42 @@ function branchToGeometry(seg, radialSegments = 5) {
 }
 
 /**
- * Build a billboard-like leaf quad (double-sided) at a world position.
+ * Build a low-poly 3D foliage blob (icosahedron) at a world position.
+ * Adds per-vertex color jitter so each blob reads as a cluster of leaves
+ * rather than a smooth sphere. Much cheaper than quads with alpha textures.
  */
-function leafToGeometry(leaf) {
-  const s = leaf.size;
-  const g = new THREE.PlaneGeometry(s, s, 1, 1);
-  // Randomize orientation for fuller look
+function leafToGeometry(leaf, baseColor) {
+  const r = leaf.size * 0.55;
+  const g = new THREE.IcosahedronGeometry(r, 0);
+
+  // Per-vertex color jitter — bias UPWARD so foliage reads light, not muddy.
+  const pos = g.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const base = new THREE.Color(baseColor);
+  const hsl = { h: 0, s: 0, l: 0 };
+  base.getHSL(hsl);
+  // Shift base toward mid-lightness so PMREM doesn't render it black
+  const baseLight = Math.max(0.35, hsl.l);
+  for (let i = 0; i < pos.count; i++) {
+    const jitter = Math.random() * 0.3; // 0..+0.3 (positive bias only)
+    const c = new THREE.Color().setHSL(
+      hsl.h + (Math.random() - 0.5) * 0.04,
+      hsl.s * (0.9 + Math.random() * 0.2),
+      Math.min(0.85, baseLight + jitter),
+    );
+    colors[i * 3] = c.r;
+    colors[i * 3 + 1] = c.g;
+    colors[i * 3 + 2] = c.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  // Slight anisotropic squash for varied silhouettes
+  const sx = 0.85 + Math.random() * 0.4;
+  const sy = 0.8 + Math.random() * 0.5;
+  const sz = 0.85 + Math.random() * 0.4;
+  g.scale(sx, sy, sz);
   const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-    Math.random() * 0.8 - 0.4,
-    Math.random() * Math.PI * 2,
-    Math.random() * 0.8 - 0.4,
+    Math.random() * Math.PI, Math.random() * Math.PI * 2, Math.random() * Math.PI,
   ));
   g.applyQuaternion(quat);
   g.translate(leaf.pos.x, leaf.pos.y, leaf.pos.z);
@@ -136,23 +162,27 @@ function leafToGeometry(leaf) {
 export const TREE_PRESETS = {
   oak: {
     trunkLength: 5.5, trunkRadius: 0.9, radiusTaper: 0.75, lengthTaper: 0.78,
-    branchCount: [2, 3], branchAngle: 0.75, maxDepth: 4, leafSize: 1.8,
-    sideFoliage: true, barkColor: 0x6a4a28, leafColor: 0x4a7a30, scaleRange: [0.7, 1.25],
+    branchCount: [2, 3], branchAngle: 0.75, maxDepth: 4, leafSize: 2.4,
+    terminalCluster: 8, sideFoliage: true,
+    barkColor: 0x4a3220, leafColor: 0x3a6622, scaleRange: [0.7, 1.25],
   },
   pine: {
     trunkLength: 8, trunkRadius: 0.7, radiusTaper: 0.65, lengthTaper: 0.7,
-    branchCount: [3, 5], branchAngle: 1.25, maxDepth: 3, leafSize: 1.4,
-    sideFoliage: false, barkColor: 0x4a3018, leafColor: 0x356b38, scaleRange: [0.8, 1.4],
+    branchCount: [3, 5], branchAngle: 1.25, maxDepth: 3, leafSize: 2.0,
+    terminalCluster: 6, sideFoliage: false,
+    barkColor: 0x3a2614, leafColor: 0x2a5a2f, scaleRange: [0.8, 1.4],
   },
   birch: {
     trunkLength: 6.5, trunkRadius: 0.5, radiusTaper: 0.7, lengthTaper: 0.75,
-    branchCount: [2, 3], branchAngle: 0.55, maxDepth: 4, leafSize: 1.2,
-    sideFoliage: true, barkColor: 0xd8d0c4, leafColor: 0x88aa50, scaleRange: [0.7, 1.1],
+    branchCount: [2, 3], branchAngle: 0.55, maxDepth: 4, leafSize: 1.8,
+    terminalCluster: 7, sideFoliage: true,
+    barkColor: 0xcac0b0, leafColor: 0x7aa442, scaleRange: [0.7, 1.1],
   },
   bush: {
     trunkLength: 1.4, trunkRadius: 0.35, radiusTaper: 0.78, lengthTaper: 0.8,
-    branchCount: [3, 4], branchAngle: 1.1, maxDepth: 2, leafSize: 1.3,
-    sideFoliage: true, barkColor: 0x5a3820, leafColor: 0x5a8030, scaleRange: [0.8, 1.3],
+    branchCount: [3, 4], branchAngle: 1.1, maxDepth: 2, leafSize: 1.8,
+    terminalCluster: 6, sideFoliage: true,
+    barkColor: 0x4a2c18, leafColor: 0x4a7028, scaleRange: [0.8, 1.3],
   },
 };
 
@@ -183,9 +213,10 @@ export function buildTreePrototype(presetName, seed = 1) {
   barkGeom.computeVertexNormals();
   for (const g of barkGeoms) g.dispose();
 
-  // Merge leaves
-  const leafGeoms = leafPoints.map((l) => leafToGeometry(l));
+  // Merge leaves (foliage blobs)
+  const leafGeoms = leafPoints.map((l) => leafToGeometry(l, params.leafColor));
   const leafGeom = BufferGeometryUtils.mergeGeometries(leafGeoms, false);
+  leafGeom.computeVertexNormals();
   for (const g of leafGeoms) g.dispose();
 
   return { barkGeom, leafGeom, params };
@@ -217,16 +248,18 @@ export function createProceduralForest(arcs, options = {}) {
 
     const barkMat = new THREE.MeshStandardMaterial({
       color: params.barkColor,
-      roughness: 0.95,
+      roughness: 0.98,
       metalness: 0,
+      envMapIntensity: 0.3, // keep PMREM from washing out to white
+      flatShading: true,
     });
     const leafMat = new THREE.MeshStandardMaterial({
-      color: params.leafColor,
+      vertexColors: true, // per-blob HSL jitter baked into the geometry
       emissive: params.leafColor,
-      emissiveIntensity: 0.25,
-      roughness: 0.75,
+      emissiveIntensity: 0.45,
+      roughness: 0.7,
       metalness: 0,
-      side: THREE.DoubleSide,
+      envMapIntensity: 0.6,
       flatShading: true,
     });
 

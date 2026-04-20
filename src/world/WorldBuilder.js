@@ -4,6 +4,8 @@ import { createWaterPlane } from './WaterPlane.js';
 import { createCloudLayer } from './CloudPlane.js';
 import { createForest } from './ForestPlacer.js';
 import { createProceduralForest } from './ProceduralForest.js';
+import { InstancedForest, createLeafTexture, createBarkTexture } from '../vendor/RedReddingtonForest.js';
+import { getTerrainHeight } from './Terrain.js';
 import { createLandmark } from './Landmarks.js';
 import { createHouses } from './HousePlacer.js';
 import { createHotelResorts } from './HotelResort.js';
@@ -13,6 +15,7 @@ import { FrustumCuller } from '../spatial/FrustumCuller.js';
 import { createTerrainMaterial } from './TerrainShader.js';
 import {
   GRASS_TEXTURE_REPEAT, WATER_LEVEL, FOG_NEAR, FOG_FAR,
+  WORLD_HALF,
 } from '../constants.js';
 
 // Detect mobile for reduced scene complexity
@@ -101,15 +104,55 @@ export function buildWorld(scene, renderer) {
     scene.add(resorts);
   }
 
-  // --- Forest (placed AFTER houses, excludes tree positions near buildings) ---
-  // Default: procedural L-system instanced forest (attribution: red-reddington,
-  // MIT). Legacy sprite forest still available via ?forest=sprite for A/B.
-  const forestMode = new URLSearchParams(location.search).get('forest') || 'proc';
-  const useProcForest = forestMode !== 'sprite';
+  // --- Forest ---
+  // Mode selection (default = red-reddington L-system forest, MIT):
+  //   ?forest=rr       (default) — red-reddington's shader-LOD instanced forest
+  //   ?forest=proc     — our clean-room L-system PoC (older version)
+  //   ?forest=sprite   — legacy canvas-sprite forest
+  const forestMode = new URLSearchParams(location.search).get('forest') || 'rr';
   console.time('Forest');
-  let forest = useProcForest
-    ? createProceduralForest(arcs, { count: IS_MOBILE ? 700 : 1400 })
-    : createForest(arcs, housePositions);
+
+  function buildRrForest() {
+    const count = IS_MOBILE ? 1500 : 3500;
+    const leafTex = createLeafTexture();
+    const barkTex = createBarkTexture();
+    const rr = new InstancedForest({
+      treeCount: count,
+      forestRadius: WORLD_HALF * 0.9,
+      forestCenter: new THREE.Vector3(0, 0, 0),
+      groundHeightFn: (x, z) => getTerrainHeight(x, z, arcs),
+      groundFilterFn: (x, y, z) => y > WATER_LEVEL + 2 && y < 90,
+      config: {
+        // Bigger trees so they're not dwarfed by a 6km terrain
+        TRUNK_LENGTH_MIN: 10,
+        TRUNK_LENGTH_MAX: 18,
+        TRUNK_RADIUS_MIN: 0.35,
+        TRUNK_RADIUS_MAX: 0.7,
+        LEAF_SIZE: 2.2,
+        // Scale LOD distances to our flight-game view range
+        LOD_FADE_START: 260,
+        LOD_MAX_DISTANCE: 520,
+        LOD_SWAY_DISTANCE: 120,
+        LOD_SWAY_FADE_START: 70,
+      },
+    });
+    const result = rr.generate(leafTex, barkTex);
+    console.log(`  RedReddington forest: ${result.stats.trees} trees, ${result.stats.branches} branches, ${result.stats.leaves} leaves`);
+    rr.group.name = 'rr-forest';
+    return { group: rr.group, updater: rr };
+  }
+
+  let rrUpdater = null;
+  let forest;
+  if (forestMode === 'rr') {
+    const built = buildRrForest();
+    forest = built.group;
+    rrUpdater = built.updater;
+  } else if (forestMode === 'proc') {
+    forest = createProceduralForest(arcs, { count: IS_MOBILE ? 700 : 1400 });
+  } else {
+    forest = createForest(arcs, housePositions);
+  }
   scene.add(forest);
   console.timeEnd('Forest');
 
@@ -128,12 +171,19 @@ export function buildWorld(scene, renderer) {
         }
       });
     }
-    forest = useProcForest
-      ? createProceduralForest(arcs, {
-          count: IS_MOBILE ? 700 : 1400,
-          presets: biomeForestOptions.types || ['oak', 'pine', 'birch', 'bush'],
-        })
-      : createForest(arcs, housePositions, biomeForestOptions);
+    if (forestMode === 'rr') {
+      if (rrUpdater) rrUpdater.dispose();
+      const built = buildRrForest();
+      forest = built.group;
+      rrUpdater = built.updater;
+    } else if (forestMode === 'proc') {
+      forest = createProceduralForest(arcs, {
+        count: IS_MOBILE ? 700 : 1400,
+        presets: biomeForestOptions.types || ['oak', 'pine', 'birch', 'bush'],
+      });
+    } else {
+      forest = createForest(arcs, housePositions, biomeForestOptions);
+    }
     scene.add(forest);
   }
 
@@ -169,11 +219,14 @@ export function buildWorld(scene, renderer) {
   const frustumCuller = new FrustumCuller(octree, chunks);
   console.timeEnd('Octree');
 
+  let elapsed = 0;
   function update(dt, camera, birdAltitude) {
+    elapsed += dt;
     water.update(dt);
     clouds.update(dt);
     frustumCuller.update(camera);
     if (underwater) underwater.update(dt, birdAltitude);
+    if (rrUpdater) rrUpdater.update(elapsed);
   }
 
   return { update, arcs, terrainChunks: chunks, regenerateForest, regenerateLandmark };

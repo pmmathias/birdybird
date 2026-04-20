@@ -44,15 +44,25 @@ await page.evaluate(() => {
 });
 
 // Take screenshots from several angles over the forest
-// Find a spot with trees and park the camera nearby — read instanceMatrix directly
+// Find a tree closest to the origin for a clean screenshot background
 const treeSpot = await page.evaluate(() => {
   const scene = window.__scene;
   const procForest = scene.getObjectByName('proc-forest');
   if (!procForest) return null;
-  const firstBark = procForest.children.find((c) => c.isInstancedMesh && c.count > 0);
-  if (!firstBark) return null;
-  const arr = firstBark.instanceMatrix.array;
-  return { x: arr[12], y: arr[13], z: arr[14] };
+  let best = null;
+  let bestDist = Infinity;
+  procForest.traverse((c) => {
+    if (!c.isInstancedMesh || c.count === 0) return;
+    const arr = c.instanceMatrix.array;
+    for (let i = 0; i < c.count; i++) {
+      const x = arr[i * 16 + 12];
+      const y = arr[i * 16 + 13];
+      const z = arr[i * 16 + 14];
+      const d = x * x + z * z;
+      if (d < bestDist) { bestDist = d; best = { x, y, z }; }
+    }
+  });
+  return best;
 });
 console.log('First tree at:', treeSpot);
 
