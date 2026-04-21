@@ -131,7 +131,7 @@ export function buildWorld(scene, renderer) {
       let tooClose = false;
       for (const c of centers) {
         const d = Math.hypot(c.x - x, c.z - z);
-        if (d < 180) { tooClose = true; break; }
+        if (d < 140) { tooClose = true; break; }
       }
       if (tooClose) continue;
       centers.push({ x, z });
@@ -142,7 +142,7 @@ export function buildWorld(scene, renderer) {
       // Box-Muller for Gaussian-ish spread — tight core, some stragglers
       const u1 = Math.random() || 0.0001;
       const u2 = Math.random();
-      const mag = Math.sqrt(-2 * Math.log(u1)) * 55; // ~55m 1-sigma
+      const mag = Math.sqrt(-2 * Math.log(u1)) * 42; // ~42m 1-sigma → tighter
       const angle = u2 * Math.PI * 2;
       positions.push({
         x: c.x + Math.cos(angle) * mag,
@@ -153,17 +153,18 @@ export function buildWorld(scene, renderer) {
   }
 
   function buildRrForest() {
-    // Defaults from headless Metal-GPU benchmark (scripts/forest-bench.mjs):
-    //   desktop 1200 trees → ~75 FPS sustained
-    //   mobile 500 trees → ~60 FPS target (¼ desktop GPU rule of thumb)
-    // Override via ?trees=N for live tuning.
-    const count = countOverride || (IS_MOBILE ? 500 : 1200);
-    // Dense clusters ≈ "little forests": ~150 trees per cluster, Gaussian-
-    // scattered within ~55m — feels like woods, not orchards.
-    const clusterCount = clustersOverride || Math.max(4, Math.round(count / 150));
+    // The real bottleneck is vertex-shader invocations per leaf-instance.
+    // Spatial chunking proved to cost more in draw-call overhead than it saves
+    // in culling on our 6 km world with long-fog cameras. Bigger win comes
+    // from: fewer leaves per tree × more trees + a world-spanning bounding.
+    const count = countOverride || (IS_MOBILE ? 800 : 2000);
+    // More smaller clusters reads as "many little forests" instead of
+    // "two big ones + empty world". ~100 trees per cluster.
+    const clusterCount = clustersOverride || Math.max(8, Math.round(count / 100));
     const leafTex = createLeafTexture();
     const barkTex = createBarkTexture();
     const { positions, centers } = sampleClusterPositions(count, clusterCount);
+
     const rr = new InstancedForest({
       treeCount: positions.length,
       treePositions: positions,
@@ -174,16 +175,31 @@ export function buildWorld(scene, renderer) {
         TRUNK_LENGTH_MAX: 18,
         TRUNK_RADIUS_MIN: 0.35,
         TRUNK_RADIUS_MAX: 0.7,
-        LEAF_SIZE: 2.2,
-        LOD_FADE_START: 260,
-        LOD_MAX_DISTANCE: 520,
-        LOD_SWAY_DISTANCE: 120,
-        LOD_SWAY_FADE_START: 70,
+        LEAF_SIZE: 2.6,       // compensate for lower density with bigger leaves
+        LEAF_DENSITY: 2,      // was 4 — halves leaf instances per tree
+        LOD_FADE_START: 220,
+        LOD_MAX_DISTANCE: 440,
+        LOD_SWAY_DISTANCE: 110,
+        LOD_SWAY_FADE_START: 60,
       },
     });
     const result = rr.generate(leafTex, barkTex);
     console.log(`  RedReddington forest: ${result.stats.trees} trees in ${centers.length} clusters, ${result.stats.branches} branches, ${result.stats.leaves} leaves`);
     rr.group.name = 'rr-forest';
+
+    // World-spanning bounding sphere so Three.js doesn't wrongly cull the
+    // forest when the camera is aimed away from world origin (default
+    // bounding is just the unit-cylinder geometry).
+    const worldSphere = new THREE.Sphere(new THREE.Vector3(0, 40, 0), WORLD_HALF * 1.5);
+    if (rr.meshes.bark) {
+      rr.meshes.bark.geometry.boundingSphere = worldSphere.clone();
+      rr.meshes.bark.frustumCulled = true;
+    }
+    if (rr.meshes.leaves) {
+      rr.meshes.leaves.geometry.boundingSphere = worldSphere.clone();
+      rr.meshes.leaves.frustumCulled = true;
+    }
+
     return { group: rr.group, updater: rr };
   }
 
