@@ -2,8 +2,6 @@ import * as THREE from 'three';
 import { createTerrain } from './Terrain.js';
 import { createWaterPlane } from './WaterPlane.js';
 import { createCloudLayer } from './CloudPlane.js';
-import { createForest } from './ForestPlacer.js';
-import { createProceduralForest } from './ProceduralForest.js';
 import { InstancedForest, createLeafTexture, createBarkTexture } from '../vendor/RedReddingtonForest.js';
 import { getTerrainHeight } from './Terrain.js';
 import { createLandmark } from './Landmarks.js';
@@ -104,32 +102,79 @@ export function buildWorld(scene, renderer) {
     scene.add(resorts);
   }
 
-  // --- Forest ---
-  // Mode selection (default = red-reddington L-system forest, MIT):
-  //   ?forest=rr       (default) — red-reddington's shader-LOD instanced forest
-  //   ?forest=proc     — our clean-room L-system PoC (older version)
-  //   ?forest=sprite   — legacy canvas-sprite forest
-  const forestMode = new URLSearchParams(location.search).get('forest') || 'rr';
+  // --- Forest (red-reddington's L-system instanced forest, MIT) ---
   console.time('Forest');
 
+  // URL overrides for tuning: ?trees=N&clusters=K
+  const urlParams = new URLSearchParams(location.search);
+  const countOverride = parseInt(urlParams.get('trees'), 10);
+  const clustersOverride = parseInt(urlParams.get('clusters'), 10);
+
+  /**
+   * Sample cluster-based tree positions: pick K cluster centers (biased toward
+   * land, away from water), then scatter trees inside each cluster with a
+   * Gaussian-ish radius. This reads as "small forests" rather than evenly-
+   * spaced trees.
+   */
+  function sampleClusterPositions(treeCount, clusterCount) {
+    const positions = [];
+    const sampleRadius = WORLD_HALF * 0.9;
+    const centers = [];
+    let attempts = 0;
+    while (centers.length < clusterCount && attempts < clusterCount * 30) {
+      attempts++;
+      const x = (Math.random() * 2 - 1) * sampleRadius;
+      const z = (Math.random() * 2 - 1) * sampleRadius;
+      const y = getTerrainHeight(x, z, arcs);
+      if (y < WATER_LEVEL + 4 || y > 80) continue;
+      // Keep some min distance between clusters so they don't merge
+      let tooClose = false;
+      for (const c of centers) {
+        const d = Math.hypot(c.x - x, c.z - z);
+        if (d < 180) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+      centers.push({ x, z });
+    }
+
+    for (let i = 0; i < treeCount; i++) {
+      const c = centers[i % centers.length];
+      // Box-Muller for Gaussian-ish spread — tight core, some stragglers
+      const u1 = Math.random() || 0.0001;
+      const u2 = Math.random();
+      const mag = Math.sqrt(-2 * Math.log(u1)) * 55; // ~55m 1-sigma
+      const angle = u2 * Math.PI * 2;
+      positions.push({
+        x: c.x + Math.cos(angle) * mag,
+        z: c.z + Math.sin(angle) * mag,
+      });
+    }
+    return { positions, centers };
+  }
+
   function buildRrForest() {
-    const count = IS_MOBILE ? 1500 : 3500;
+    // Defaults from headless Metal-GPU benchmark (scripts/forest-bench.mjs):
+    //   desktop 1200 trees → ~75 FPS sustained
+    //   mobile 500 trees → ~60 FPS target (¼ desktop GPU rule of thumb)
+    // Override via ?trees=N for live tuning.
+    const count = countOverride || (IS_MOBILE ? 500 : 1200);
+    // Dense clusters ≈ "little forests": ~150 trees per cluster, Gaussian-
+    // scattered within ~55m — feels like woods, not orchards.
+    const clusterCount = clustersOverride || Math.max(4, Math.round(count / 150));
     const leafTex = createLeafTexture();
     const barkTex = createBarkTexture();
+    const { positions, centers } = sampleClusterPositions(count, clusterCount);
     const rr = new InstancedForest({
-      treeCount: count,
-      forestRadius: WORLD_HALF * 0.9,
-      forestCenter: new THREE.Vector3(0, 0, 0),
+      treeCount: positions.length,
+      treePositions: positions,
       groundHeightFn: (x, z) => getTerrainHeight(x, z, arcs),
       groundFilterFn: (x, y, z) => y > WATER_LEVEL + 2 && y < 90,
       config: {
-        // Bigger trees so they're not dwarfed by a 6km terrain
         TRUNK_LENGTH_MIN: 10,
         TRUNK_LENGTH_MAX: 18,
         TRUNK_RADIUS_MIN: 0.35,
         TRUNK_RADIUS_MAX: 0.7,
         LEAF_SIZE: 2.2,
-        // Scale LOD distances to our flight-game view range
         LOD_FADE_START: 260,
         LOD_MAX_DISTANCE: 520,
         LOD_SWAY_DISTANCE: 120,
@@ -137,21 +182,17 @@ export function buildWorld(scene, renderer) {
       },
     });
     const result = rr.generate(leafTex, barkTex);
-    console.log(`  RedReddington forest: ${result.stats.trees} trees, ${result.stats.branches} branches, ${result.stats.leaves} leaves`);
+    console.log(`  RedReddington forest: ${result.stats.trees} trees in ${centers.length} clusters, ${result.stats.branches} branches, ${result.stats.leaves} leaves`);
     rr.group.name = 'rr-forest';
     return { group: rr.group, updater: rr };
   }
 
   let rrUpdater = null;
   let forest;
-  if (forestMode === 'rr') {
+  {
     const built = buildRrForest();
     forest = built.group;
     rrUpdater = built.updater;
-  } else if (forestMode === 'proc') {
-    forest = createProceduralForest(arcs, { count: IS_MOBILE ? 700 : 1400 });
-  } else {
-    forest = createForest(arcs, housePositions);
   }
   scene.add(forest);
   console.timeEnd('Forest');
@@ -160,7 +201,7 @@ export function buildWorld(scene, renderer) {
    * Rebuild the forest with biome-specific options.
    * Called on level-up so each biome has its own vegetation character.
    */
-  function regenerateForest(biomeForestOptions = {}) {
+  function regenerateForest() {
     if (forest) {
       scene.remove(forest);
       forest.traverse((obj) => {
@@ -171,19 +212,10 @@ export function buildWorld(scene, renderer) {
         }
       });
     }
-    if (forestMode === 'rr') {
-      if (rrUpdater) rrUpdater.dispose();
-      const built = buildRrForest();
-      forest = built.group;
-      rrUpdater = built.updater;
-    } else if (forestMode === 'proc') {
-      forest = createProceduralForest(arcs, {
-        count: IS_MOBILE ? 700 : 1400,
-        presets: biomeForestOptions.types || ['oak', 'pine', 'birch', 'bush'],
-      });
-    } else {
-      forest = createForest(arcs, housePositions, biomeForestOptions);
-    }
+    if (rrUpdater) rrUpdater.dispose();
+    const built = buildRrForest();
+    forest = built.group;
+    rrUpdater = built.updater;
     scene.add(forest);
   }
 

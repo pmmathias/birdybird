@@ -253,6 +253,7 @@ export class InstancedForest {
     this.forestCenter = options.forestCenter || new THREE.Vector3(0, 0, 0);
     this.groundHeightFn = options.groundHeightFn || null; // (x,z) → y
     this.groundFilterFn = options.groundFilterFn || null; // (x,y,z) → boolean
+    this.treePositions = options.treePositions || null;   // pre-computed [{x,z}]
     this.seed = options.seed ?? 0;
 
     this.branchMatrices = [];
@@ -308,7 +309,10 @@ export class InstancedForest {
 
     let placed = 0;
     let attempts = 0;
-    const maxAttempts = this.treeCount * 6;
+    const hasPreset = Array.isArray(this.treePositions) && this.treePositions.length > 0;
+    const maxAttempts = hasPreset
+      ? this.treePositions.length
+      : this.treeCount * 6;
     const seedBase = this.seed;
 
     while (placed < this.treeCount && attempts < maxAttempts) {
@@ -316,10 +320,18 @@ export class InstancedForest {
       attempts++;
       const rand = this._mulberry32(i * 54321 + 11111 + seedBase);
 
-      const r = this.config.CLEAR_RADIUS + Math.sqrt(rand()) * this.forestRadius;
-      const theta = rand() * Math.PI * 2;
-      const treeX = this.forestCenter.x + Math.cos(theta) * r;
-      const treeZ = this.forestCenter.z + Math.sin(theta) * r;
+      let treeX, treeZ;
+      if (hasPreset) {
+        const p = this.treePositions[i];
+        if (!p) break;
+        treeX = p.x;
+        treeZ = p.z;
+      } else {
+        const r = this.config.CLEAR_RADIUS + Math.sqrt(rand()) * this.forestRadius;
+        const theta = rand() * Math.PI * 2;
+        treeX = this.forestCenter.x + Math.cos(theta) * r;
+        treeZ = this.forestCenter.z + Math.sin(theta) * r;
+      }
       let treeY = this.forestCenter.y;
       if (this.groundHeightFn) treeY = this.groundHeightFn(treeX, treeZ);
       if (this.groundFilterFn && !this.groundFilterFn(treeX, treeY, treeZ)) continue;
