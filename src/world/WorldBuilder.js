@@ -120,6 +120,15 @@ export function buildWorld(scene, renderer) {
     const positions = [];
     const sampleRadius = WORLD_HALF * 0.9;
     const centers = [];
+
+    // Guarantee a cluster near the bird's spawn (origin) so the player always
+    // sees trees right after calibration — otherwise on mobile + low LOD
+    // the world looks empty until you fly 500m.
+    for (const seed of [{ x: 120, z: 80 }, { x: -140, z: 60 }, { x: 60, z: -130 }]) {
+      const y = getTerrainHeight(seed.x, seed.z, arcs);
+      if (y > WATER_LEVEL + 4 && y < 80) centers.push(seed);
+    }
+
     let attempts = 0;
     while (centers.length < clusterCount && attempts < clusterCount * 30) {
       attempts++;
@@ -153,13 +162,7 @@ export function buildWorld(scene, renderer) {
   }
 
   function buildRrForest() {
-    // The real bottleneck is vertex-shader invocations per leaf-instance.
-    // Spatial chunking proved to cost more in draw-call overhead than it saves
-    // in culling on our 6 km world with long-fog cameras. Bigger win comes
-    // from: fewer leaves per tree × more trees + a world-spanning bounding.
-    const count = countOverride || (IS_MOBILE ? 800 : 2000);
-    // More smaller clusters reads as "many little forests" instead of
-    // "two big ones + empty world". ~100 trees per cluster.
+    const count = countOverride || (IS_MOBILE ? 600 : 2000);
     const clusterCount = clustersOverride || Math.max(8, Math.round(count / 100));
     const leafTex = createLeafTexture();
     const barkTex = createBarkTexture();
@@ -175,12 +178,15 @@ export function buildWorld(scene, renderer) {
         TRUNK_LENGTH_MAX: 18,
         TRUNK_RADIUS_MIN: 0.35,
         TRUNK_RADIUS_MAX: 0.7,
-        LEAF_SIZE: 2.6,       // compensate for lower density with bigger leaves
-        LEAF_DENSITY: 2,      // was 4 — halves leaf instances per tree
-        LOD_FADE_START: 220,
-        LOD_MAX_DISTANCE: 440,
-        LOD_SWAY_DISTANCE: 110,
-        LOD_SWAY_FADE_START: 60,
+        LEAF_SIZE: 2.6,
+        LEAF_DENSITY: 2,
+        // Much bigger LOD range — our flight altitudes regularly exceed the
+        // old 440m cull. At typical 100–300m altitude the player could see
+        // zero trees because every cluster was beyond the cull boundary.
+        LOD_FADE_START: 600,
+        LOD_MAX_DISTANCE: 1400,
+        LOD_SWAY_DISTANCE: 140,
+        LOD_SWAY_FADE_START: 80,
       },
     });
     const result = rr.generate(leafTex, barkTex);

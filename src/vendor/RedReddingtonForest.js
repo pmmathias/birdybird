@@ -543,6 +543,10 @@ export class InstancedForest {
           rootBumpsMax: { value: this.config.ROOT_BUMPS_MAX },
         },
         vertexShader: /* glsl */ `
+          // Our world is 6 km across → positions well above mediump's safe
+          // range. iOS/Metal silently drops vertices without this.
+          precision highp float;
+          precision highp int;
           uniform float leafFadeStart;
           uniform float maxLeafDistance;
           uniform float rootSpreadMin;
@@ -616,6 +620,7 @@ export class InstancedForest {
           }
         `,
         fragmentShader: /* glsl */ `
+          precision highp float;
           uniform sampler2D barkTexture;
           uniform vec3 barkColor;
           uniform vec3 leafTintColor;
@@ -682,6 +687,8 @@ export class InstancedForest {
           leafFadeStart: { value: this.config.LOD_FADE_START },
         },
         vertexShader: /* glsl */ `
+          precision highp float;
+          precision highp int;
           attribute vec3 instanceColorAttr;
           attribute float instanceRandom;
           attribute float instanceWobbleX;
@@ -702,7 +709,12 @@ export class InstancedForest {
             float dist = length(cameraPosition - instancePos);
 
             if (dist > maxLeafDistance) {
-              gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+              // Place well outside NDC clip space. Some mobile GPUs (Apple
+              // Metal in particular) don't reliably cull zero-area triangles
+              // placed at the clip-space origin — they can rasterize as black
+              // pixels covering the center of the screen. Clipping via
+              // out-of-range NDC is 100% portable.
+              gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
               vUv = vec2(0.0);
               vColor = vec3(0.0);
               vRandom = 0.0;
@@ -741,7 +753,7 @@ export class InstancedForest {
           }
         `,
         fragmentShader: /* glsl */ `
-          precision mediump float;
+          precision highp float;
           uniform sampler2D leafTexture;
           uniform vec3 sunDirection;
           uniform vec3 sunColor;
