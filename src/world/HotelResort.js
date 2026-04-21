@@ -90,19 +90,40 @@ function createWaterSlide(group, x, y, z, height, color) {
 }
 
 function createPalmTree(group, x, y, z, height = 8) {
-  // Trunk
+  // Trunk — slim, slightly tapered
   const trunkMat = makeMat(0x8B6914);
-  const trunkGeo = new THREE.CylinderGeometry(0.2, 0.35, height, 6);
+  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.32, height, 6);
   const trunk = new THREE.Mesh(trunkGeo, trunkMat);
   trunk.position.set(x, y + height / 2, z);
   group.add(trunk);
 
-  // Crown (green sphere)
-  const crownMat = makeMat(0x228B22);
-  const crown = new THREE.Mesh(new THREE.SphereGeometry(2.5, 6, 4), crownMat);
-  crown.position.set(x, y + height + 1, z);
-  crown.scale.set(1, 0.6, 1);
-  group.add(crown);
+  // Fronds: 7 elongated triangular "leaves" fanning outward and drooping down
+  // — reads clearly as a palm, not a sphere.
+  const frondMat = makeMat(0x2d7a3d);
+  const frondCount = 7;
+  for (let i = 0; i < frondCount; i++) {
+    const frondGeo = new THREE.ConeGeometry(0.35, 3.2, 3);
+    const frond = new THREE.Mesh(frondGeo, frondMat);
+    const angle = (i / frondCount) * Math.PI * 2;
+    const tilt = -0.25 - Math.random() * 0.35; // droop downward
+    frond.position.set(
+      x + Math.cos(angle) * 1.4,
+      y + height + 0.2,
+      z + Math.sin(angle) * 1.4,
+    );
+    frond.rotation.z = Math.cos(angle) * Math.PI * 0.5 - tilt * Math.sin(angle);
+    frond.rotation.x = tilt;
+    frond.rotation.y = angle;
+    // Point the cone tip outward/down
+    frond.rotation.order = 'YXZ';
+    group.add(frond);
+  }
+
+  // Central cluster hiding the frond bases
+  const hubMat = makeMat(0x1f5a2e);
+  const hub = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 0), hubMat);
+  hub.position.set(x, y + height, z);
+  group.add(hub);
 }
 
 /**
