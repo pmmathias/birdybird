@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Water } from 'three/addons/objects/Water.js';
 import { WaterMesh } from 'three/addons/objects/WaterMesh.js';
 import * as TSL from 'three/tsl';
-import { MeshStandardNodeMaterial } from 'three/webgpu';
+import { MeshStandardNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu';
 import { Ocean } from '../vendor/Ocean3.js';
 import { Ocean as Ocean4 } from '../vendor/Ocean4.js';
 import { WORLD_SIZE, WATER_LEVEL } from '../constants.js';
@@ -80,9 +80,14 @@ function _checkIFFTSupport(renderer) {
 // Path 3a: WebGPU iFFT via Phil Crowther's Ocean4 (compute shaders)
 // ------------------------------------------------------------------
 function _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE) {
-  const { positionLocal, texture, normalMap, uv } = TSL;
+  const {
+    Fn, positionLocal, texture, normalMap, uv,
+    vec2, vec3, float, uniform,
+    positionWorld, cameraPosition, normalWorld,
+    normalize, dot, max, mix, pow, reflector,
+  } = TSL;
 
-  const WAVE_TILE = 2400; // meters per iFFT tile — same as Ocean3 for visual parity
+  const WAVE_TILE = 2400;
   const waves = new Ocean4(renderer, {
     Res: IS_MOBILE ? 256 : 512,
     Siz: WAVE_TILE,
@@ -90,7 +95,7 @@ function _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE) 
     Spd: 1.0,
   });
 
-  // Geometry with tiled UVs so the iFFT displacement wraps across the big plane.
+  // Tiled UVs for displacement wrapping
   const TILE_COUNT = PLANE_SIZE / WAVE_TILE;
   const geometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, SEGMENTS, SEGMENTS);
   const uvAttr = geometry.attributes.uv;
@@ -98,27 +103,64 @@ function _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE) 
     uvAttr.setXY(i, uvAttr.getX(i) * TILE_COUNT, uvAttr.getY(i) * TILE_COUNT);
   }
 
-  // MeshStandardNodeMaterial with iFFT displacement + normal.
-  // positionLocal gets the xyz displacement sampled from the compute-shader
-  // output texture. normalNode uses tangent-space normals from the normal map.
-  const material = new MeshStandardNodeMaterial({
-    color: new THREE.Color(0x003050),
-    metalness: 0.0,
-    roughness: 0.15,
-    transparent: false,
-  });
+  const material = new MeshBasicNodeMaterial();
   material.positionNode = positionLocal.add(texture(waves.dispMapTexture, uv()).xyz);
   material.normalNode = normalMap(texture(waves.normMapTexture, uv()), new THREE.Vector2(1, 1));
+
+  const uSunDir     = uniform(new THREE.Vector3().copy(sun.position).normalize());
+  const uSunColor   = uniform(new THREE.Color(0xfff0d4));
+  const uWaterColor = uniform(new THREE.Color(0x003050));
+  const uDistortion = uniform(IS_MOBILE ? 0.03 : 0.05);
+
+  // Create a TSL reflector here, outside the Fn so we can attach its
+  // virtual-camera target to the mesh below. The reflector renders the
+  // scene from below the water plane into a texture that we then sample
+  // distorted by the iFFT normal for the characteristic "wavy mirror" look.
+  const mirrorSampler = reflector();
+  mirrorSampler.reflector.resolutionScale = IS_MOBILE ? 0.4 : 0.6;
+
+  material.colorNode = Fn(() => {
+    const wp = positionWorld;
+    const viewDir = normalize(cameraPosition.sub(wp));
+    const N = normalize(normalWorld);
+    const L = normalize(uSunDir);
+
+    // Distort the mirror UVs by the world-space normal's XZ components so the
+    // iFFT waves warp the reflection (copied from WaterMesh's approach).
+    mirrorSampler.uvNode = mirrorSampler.uvNode.add(N.xz.mul(uDistortion));
+
+    // Fresnel reflectance (Schlick approximation)
+    const theta = max(dot(viewDir, N), 0.0);
+    const rf0 = float(0.02);
+    const reflectance = pow(float(1.0).sub(theta), 5.0).mul(float(1.0).sub(rf0)).add(rf0);
+
+    // Specular sun highlight (still useful on top of the reflection)
+    const R = TSL.reflect(uSunDir.negate(), N);
+    const RdotV = max(dot(R, viewDir), 0.0);
+    const specular = pow(RdotV, 120.0).mul(uSunColor).mul(2.0);
+
+    // Water-from-below scattering (deep water color softened by sun tint)
+    const diffuseLight = max(dot(L, N), 0.0).mul(uSunColor).mul(0.5);
+    const scatter = max(0.0, dot(N, viewDir)).mul(uWaterColor);
+    const albedo = mix(
+      uSunColor.mul(diffuseLight).mul(0.3).add(scatter),
+      mirrorSampler.rgb.add(specular),
+      reflectance,
+    );
+    return albedo;
+  })();
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = WATER_LEVEL;
+  // Attach the reflector's virtual camera to the mesh so it follows the water
+  // plane automatically (same pattern WaterMesh uses internally).
+  mesh.add(mirrorSampler.target);
 
   const waterGroup = new THREE.Group();
   waterGroup.add(mesh);
 
   function update(/* dt */) {
-    // Ocean4.update() pulls TSL `time` internally — no dt needed.
     waves.update();
   }
   return { mesh: waterGroup, update };

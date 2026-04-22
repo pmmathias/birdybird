@@ -114,6 +114,11 @@ async function test(urlParam, label) {
   } else {
     console.log('(no errors)');
   }
+  const waterHits = messages.filter(m => /water|ocean|reflector|fallback/i.test(m));
+  if (waterHits.length) {
+    console.log('--- water/ocean hits ---');
+    for (const h of waterHits.slice(0, 10)) console.log('  ' + h);
+  }
   await browser.close();
 }
 
