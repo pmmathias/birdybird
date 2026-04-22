@@ -42,7 +42,7 @@ import {
 // createRenderer() is async (WebGPURenderer needs init()); top-level await
 // works under Vite's ES-modules target.
 const renderer = await createRenderer();
-const scene = createScene(renderer);
+const scene = await createScene(renderer);
 
 // --- Camera ---
 const camera = new THREE.PerspectiveCamera(
@@ -61,7 +61,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.1;
 
 // --- Build the world ---
-const world = buildWorld(scene, renderer);
+const world = await buildWorld(scene, renderer);
 
 // --- Flight system ---
 const flightState = new FlightState();

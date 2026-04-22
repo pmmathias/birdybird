@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WebGPURenderer } from 'three/webgpu';
 
 /**
  * Dual-path renderer factory.
@@ -40,21 +41,14 @@ export async function createRenderer() {
 }
 
 async function _createWebGPURenderer() {
-  // Lazy-import three/webgpu so the WebGL-default build doesn't pull in
-  // ~150-300 kB of WebGPU node modules for users who never enable it.
-  const webgpuModule = await import('three/webgpu');
-  const { WebGPURenderer } = webgpuModule;
-
   const renderer = new WebGPURenderer({ antialias: true, forceWebGL: false });
-
   try {
     await renderer.init();
     const backend = renderer.backend?.constructor?.name || 'unknown';
     window.__rendererPath = backend.includes('WebGL') ? 'WebGPU→WebGL2' : 'WebGPU';
-    console.log(`Renderer: ${window.__rendererPath} (backend: ${backend})`);
+    console.log(`Renderer: ${window.__rendererPath}`);
   } catch (err) {
     console.error('WebGPURenderer.init() failed, falling back to WebGL:', err);
-    // Hand back a vanilla WebGL renderer as last-resort fallback
     return _createWebGLRenderer();
   }
   return renderer;

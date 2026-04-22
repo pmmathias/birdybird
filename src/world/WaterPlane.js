@@ -1,97 +1,133 @@
 import * as THREE from 'three';
 import { Water } from 'three/addons/objects/Water.js';
+import { WaterMesh } from 'three/addons/objects/WaterMesh.js';
+import * as TSL from 'three/tsl';
 import { Ocean } from '../vendor/Ocean3.js';
 import { WORLD_SIZE, WATER_LEVEL } from '../constants.js';
 
 /**
- * Animated water plane.
+ * Animated water plane — tri-path renderer support:
  *
- * Feature-detects iFFT support (WebGL2 + float color buffers).
- * - If supported: uses Phil Crowther's Ocean3 iFFT waves
- * - If not (e.g. iOS Safari without EXT_color_buffer_float):
- *   falls back to Gerstner waves via shader injection
+ * 1. WebGL2 + iFFT-capable (desktop Chrome/Firefox/Safari 16+):
+ *    Phil Crowther's Ocean3 iFFT waves with Water.js mirror
+ *    (Ocean3 © Phil Crowther, CC BY-NC-SA 3.0)
  *
- * Ocean3.js © Phil Crowther — CC BY-NC-SA 3.0
+ * 2. WebGL2 without iFFT (older mobile Safari before iOS 16, some Androids):
+ *    Gerstner wave GLSL injected into Water.js vertex shader
+ *
+ * 3. WebGPU (iOS 26+, modern Chrome/Safari):
+ *    WaterMesh (TSL NodeMaterial, drop-in equivalent of Water.js) with
+ *    Gerstner displacement via positionNode override
+ *    → Ocean3 iFFT NOT used on WebGPU (license prevents WGSL port;
+ *      see T007 for Phil's native WebGPU Ocean module as future path)
  */
-
-/**
- * Gerstner wave GLSL fallback — injected into the Water vertex shader.
- * 3 overlapping waves with different directions for realism.
- */
-const GERSTNER_PARS = /* glsl */ `
-  uniform float waveTime;
-
-  vec3 gerstnerWave(vec2 pos, float amp, float freq, float speed, vec2 dir, float steep) {
-    float phase = freq * dot(dir, pos) - speed * waveTime;
-    float c = cos(phase);
-    float s = sin(phase);
-    return vec3(
-      steep * amp * dir.x * c,
-      amp * s,
-      steep * amp * dir.y * c
-    );
-  }
-
-  vec3 gerstnerDisplace(vec2 pos) {
-    vec3 d = vec3(0.0);
-    d += gerstnerWave(pos, 0.35, 0.04, 1.0, normalize(vec2(1.0, 0.3)), 0.4);
-    d += gerstnerWave(pos, 0.25, 0.07, 1.4, normalize(vec2(-0.5, 1.0)), 0.35);
-    d += gerstnerWave(pos, 0.15, 0.11, 1.8, normalize(vec2(0.7, -0.6)), 0.3);
-    return d;
-  }
-`;
-
-/**
- * Check if the renderer supports the features Ocean3 needs.
- * Ocean3 requires WebGL2, EXT_color_buffer_float, OES_texture_float_linear.
- */
-function _checkIFFTSupport(renderer) {
-  const gl = renderer.getContext();
-  if (!gl) return false;
-
-  // WebGL2 check (Ocean3 uses GLSL3)
-  const isWebGL2 = typeof WebGL2RenderingContext !== 'undefined'
-    && gl instanceof WebGL2RenderingContext;
-  if (!isWebGL2) return false;
-
-  // Float color buffer — Ocean3 renders into Float32 framebuffers
-  if (!gl.getExtension('EXT_color_buffer_float')) return false;
-
-  // Linear filtering on float textures
-  if (!gl.getExtension('OES_texture_float_linear')) return false;
-
-  return true;
-}
-
-export function createWaterPlane(sun, renderer) {
+export async function createWaterPlane(sun, renderer) {
   const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
     || navigator.maxTouchPoints > 1;
-
-  const supportsIFFT = _checkIFFTSupport(renderer);
-  console.log(`Water: iFFT ${supportsIFFT ? 'supported → Ocean3' : 'unavailable → Gerstner fallback'}`);
-  // Expose to top bar
-  window.__waterPath = supportsIFFT ? 'iFFT' : 'Gerstner';
+  const isWebGPU = !!renderer.isWebGPURenderer;
 
   const PLANE_SIZE = WORLD_SIZE * 4;
   const SEGMENTS = IS_MOBILE ? 128 : 256;
   const REFLECTION_SIZE = IS_MOBILE ? 256 : 512;
 
-  // --- Path A: iFFT via Ocean3 ---
-  if (supportsIFFT) {
-    try {
-      return _createIFFTWater(sun, renderer, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE, IS_MOBILE);
-    } catch (err) {
-      console.warn('Ocean3 init failed, falling back to Gerstner:', err);
-      window.__waterPath = 'Gerstner'; // update indicator
-    }
+  if (isWebGPU) {
+    window.__waterPath = 'Gerstner (WebGPU)';
+    console.log('Water: WebGPU → WaterMesh + TSL Gerstner');
+    return _createWebGPUWater(sun, PLANE_SIZE, SEGMENTS, IS_MOBILE);
   }
 
-  // --- Path B: Gerstner fallback ---
-  return _createGerstnerWater(sun, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE);
+  // WebGL paths below
+  const supportsIFFT = _checkIFFTSupport(renderer);
+  window.__waterPath = supportsIFFT ? 'iFFT' : 'Gerstner';
+  console.log(`Water: WebGL2 → iFFT ${supportsIFFT ? 'supported → Ocean3' : 'unavailable → Gerstner fallback'}`);
+
+  if (supportsIFFT) {
+    try {
+      return await _createIFFTWater(sun, renderer, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE, IS_MOBILE);
+    } catch (err) {
+      console.warn('Ocean3 init failed, falling back to Gerstner:', err);
+      window.__waterPath = 'Gerstner';
+    }
+  }
+  return await _createGerstnerWater(sun, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE);
 }
 
-/** Full iFFT ocean via Phil Crowther's Ocean3 module. */
-function _createIFFTWater(sun, renderer, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE, IS_MOBILE) {
+function _checkIFFTSupport(renderer) {
+  const gl = renderer.getContext?.();
+  if (!gl) return false;
+  const isWebGL2 = typeof WebGL2RenderingContext !== 'undefined'
+    && gl instanceof WebGL2RenderingContext;
+  if (!isWebGL2) return false;
+  if (!gl.getExtension('EXT_color_buffer_float')) return false;
+  if (!gl.getExtension('OES_texture_float_linear')) return false;
+  return true;
+}
+
+// ------------------------------------------------------------------
+// Path 3: WebGPU via WaterMesh + TSL Gerstner
+// ------------------------------------------------------------------
+async function _createWebGPUWater(sun, PLANE_SIZE, SEGMENTS, IS_MOBILE) {
+  const { Fn, float, vec2, vec3, cos, sin, normalize, positionLocal, time } = TSL;
+
+  // Water normals texture — reused from Gerstner WebGL path
+  const waterNormals = new THREE.TextureLoader().load(
+    'textures/waternormals.jpg',
+    (tex) => { tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; },
+  );
+
+  const geometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, SEGMENTS, SEGMENTS);
+  const water = new WaterMesh(geometry, {
+    waterNormals,
+    sunDirection: new THREE.Vector3().copy(sun.position).normalize(),
+    sunColor: 0xffeedd,
+    waterColor: 0x003050,
+    distortionScale: IS_MOBILE ? 1.5 : 2.5,
+  });
+
+  // Gerstner displacement via positionNode override — mirrors the GLSL
+  // GERSTNER_PARS in the WebGL Gerstner path.
+  const gerstner = Fn(([pos2]) => {
+    const d = vec3(0).toVar();
+    const waves = [
+      { amp: 0.35, freq: 0.04, speed: 1.0, dx: 1.0,  dy:  0.3, steep: 0.4  },
+      { amp: 0.25, freq: 0.07, speed: 1.4, dx: -0.5, dy:  1.0, steep: 0.35 },
+      { amp: 0.15, freq: 0.11, speed: 1.8, dx: 0.7,  dy: -0.6, steep: 0.3  },
+    ];
+    for (const w of waves) {
+      const dir = normalize(vec2(w.dx, w.dy));
+      const phase = float(w.freq).mul(dir.dot(pos2)).sub(float(w.speed).mul(time));
+      const c = cos(phase);
+      const s = sin(phase);
+      d.addAssign(vec3(
+        float(w.steep).mul(w.amp).mul(dir.x).mul(c),
+        float(w.amp).mul(s),
+        float(w.steep).mul(w.amp).mul(dir.y).mul(c),
+      ));
+    }
+    return d;
+  });
+  water.material.positionNode = Fn(() => {
+    const disp = gerstner(positionLocal.xy);
+    return positionLocal.add(disp);
+  })();
+
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = WATER_LEVEL;
+
+  const waterGroup = new THREE.Group();
+  waterGroup.add(water);
+  // Note: underwater plane skipped on WebGPU for V1 (T019 follow-up)
+
+  function update(/* dt */) {
+    // TSL `time` uniform auto-advances; nothing to do
+  }
+  return { mesh: waterGroup, update };
+}
+
+// ------------------------------------------------------------------
+// Path 1: iFFT via Ocean3 (WebGL2)
+// ------------------------------------------------------------------
+async function _createIFFTWater(sun, renderer, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE, IS_MOBILE) {
   const WAVE_TILE = 2400;
   const ocean = new Ocean(renderer, {
     Res: IS_MOBILE ? 256 : 512,
@@ -137,7 +173,7 @@ function _createIFFTWater(sun, renderer, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE, 
   water.rotation.x = -Math.PI / 2;
   water.position.y = WATER_LEVEL;
 
-  const underWater = _createUnderwaterPlane(sun, PLANE_SIZE, normalMap);
+  const underWater = await _createUnderwaterPlane(sun, PLANE_SIZE, normalMap);
   const waterGroup = new THREE.Group();
   waterGroup.add(water);
   waterGroup.add(underWater);
@@ -150,8 +186,33 @@ function _createIFFTWater(sun, renderer, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE, 
   return { mesh: waterGroup, update };
 }
 
-/** Gerstner wave fallback — works on any WebGL1/WebGL2 renderer. */
-function _createGerstnerWater(sun, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE) {
+// ------------------------------------------------------------------
+// Path 2: Gerstner fallback (WebGL2 without iFFT extensions)
+// ------------------------------------------------------------------
+const GERSTNER_PARS = /* glsl */ `
+  uniform float waveTime;
+
+  vec3 gerstnerWave(vec2 pos, float amp, float freq, float speed, vec2 dir, float steep) {
+    float phase = freq * dot(dir, pos) - speed * waveTime;
+    float c = cos(phase);
+    float s = sin(phase);
+    return vec3(
+      steep * amp * dir.x * c,
+      amp * s,
+      steep * amp * dir.y * c
+    );
+  }
+
+  vec3 gerstnerDisplace(vec2 pos) {
+    vec3 d = vec3(0.0);
+    d += gerstnerWave(pos, 0.35, 0.04, 1.0, normalize(vec2(1.0, 0.3)), 0.4);
+    d += gerstnerWave(pos, 0.25, 0.07, 1.4, normalize(vec2(-0.5, 1.0)), 0.35);
+    d += gerstnerWave(pos, 0.15, 0.11, 1.8, normalize(vec2(0.7, -0.6)), 0.3);
+    return d;
+  }
+`;
+
+async function _createGerstnerWater(sun, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE) {
   const geometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, SEGMENTS, SEGMENTS);
 
   const waterNormals = new THREE.TextureLoader().load(
@@ -170,7 +231,6 @@ function _createGerstnerWater(sun, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE) {
     fog: false,
   });
 
-  // Inject Gerstner displacement into the Water vertex shader
   water.material.uniforms.waveTime = { value: 0 };
   water.material.vertexShader = water.material.vertexShader.replace(
     'void main() {',
@@ -184,7 +244,7 @@ function _createGerstnerWater(sun, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE) {
   water.rotation.x = -Math.PI / 2;
   water.position.y = WATER_LEVEL;
 
-  const underWater = _createUnderwaterPlane(sun, PLANE_SIZE, waterNormals);
+  const underWater = await _createUnderwaterPlane(sun, PLANE_SIZE, waterNormals);
   const waterGroup = new THREE.Group();
   waterGroup.add(water);
   waterGroup.add(underWater);
@@ -197,8 +257,7 @@ function _createGerstnerWater(sun, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE) {
   return { mesh: waterGroup, update };
 }
 
-/** Simple flat underwater-side plane viewed from below when diving. */
-function _createUnderwaterPlane(sun, PLANE_SIZE, normalsTexture) {
+async function _createUnderwaterPlane(sun, PLANE_SIZE, normalsTexture) {
   const underWater = new Water(new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE), {
     textureWidth: 256,
     textureHeight: 256,

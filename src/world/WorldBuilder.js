@@ -31,7 +31,7 @@ function loadTex(url) {
 /**
  * Orchestrates creation of all world elements.
  */
-export function buildWorld(scene, renderer) {
+export async function buildWorld(scene, renderer) {
   // Find sun direction from directional light
   let sunDir = new THREE.Vector3(0.4, 0.6, 0.2).normalize();
   scene.traverse((obj) => {
@@ -74,7 +74,7 @@ export function buildWorld(scene, renderer) {
   // --- Water ---
   let sun = null;
   scene.traverse((obj) => { if (obj.isDirectionalLight) sun = obj; });
-  const water = createWaterPlane(sun, renderer);
+  const water = await createWaterPlane(sun, renderer);
   scene.add(water.mesh);
 
   // --- Clouds ---
