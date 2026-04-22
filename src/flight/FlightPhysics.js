@@ -170,6 +170,30 @@ export class FlightPhysics {
       s.velocity.addScaledVector(dragDir, dragMag * dt);
     }
 
+    // --- 5b. Lateral coherence — damp horizontal sideways velocity ---
+    // Without this, after a quick yaw turn s.forward snaps to the new heading
+    // but s.velocity.xz keeps its old direction (only gradually redirected by
+    // thrust). The bird visibly crabs sideways. Real wings catch a lot of
+    // lateral air so we model that as a damping of the XZ velocity component
+    // perpendicular to forward. Y (climb/dive) is untouched.
+    if (speed > 2 && s.wingSpread > 0.5) {
+      const vxz_x = s.velocity.x;
+      const vxz_z = s.velocity.z;
+      const fxz_x = s.forward.x;
+      const fxz_z = s.forward.z;
+      const fxzLen = Math.sqrt(fxz_x * fxz_x + fxz_z * fxz_z);
+      if (fxzLen > 0.1 && (vxz_x * vxz_x + vxz_z * vxz_z) > 4) {
+        const fxnx = fxz_x / fxzLen;
+        const fxnz = fxz_z / fxzLen;
+        const fwdDot = vxz_x * fxnx + vxz_z * fxnz;
+        const latX = vxz_x - fxnx * fwdDot;
+        const latZ = vxz_z - fxnz * fwdDot;
+        const LATERAL_DRAG_RATE = 2.0; // s^-1 — ~half-life 0.35s
+        s.velocity.x -= latX * LATERAL_DRAG_RATE * dt;
+        s.velocity.z -= latZ * LATERAL_DRAG_RATE * dt;
+      }
+    }
+
     // --- 6. Gravity ---
     s.velocity.y += GRAVITY * dt;
 
