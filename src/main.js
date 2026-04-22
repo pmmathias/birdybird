@@ -39,7 +39,9 @@ import {
 } from './constants.js';
 
 // --- Renderer & Scene ---
-const renderer = createRenderer();
+// createRenderer() is async (WebGPURenderer needs init()); top-level await
+// works under Vite's ES-modules target.
+const renderer = await createRenderer();
 const scene = createScene(renderer);
 
 // --- Camera ---
