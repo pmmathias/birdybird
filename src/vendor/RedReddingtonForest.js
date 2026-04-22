@@ -23,6 +23,7 @@
  */
 
 import * as THREE from 'three';
+import { createBarkNodeMaterial, createLeafNodeMaterial } from './RedReddingtonForestNode.js';
 
 export const DEFAULT_CONFIG = {
   // Forest
@@ -255,6 +256,10 @@ export class InstancedForest {
     this.groundFilterFn = options.groundFilterFn || null; // (x,y,z) → boolean
     this.treePositions = options.treePositions || null;   // pre-computed [{x,z}]
     this.seed = options.seed ?? 0;
+    // When true, `_buildMeshes` emits NodeMaterial-based bark + leaf materials
+    // compatible with WebGPURenderer. Default (false) uses the original
+    // GLSL ShaderMaterials — no visual regression on WebGL.
+    this.useWebGPU = !!options.useWebGPU;
 
     this.branchMatrices = [];
     this.branchTreeBaseY = []; // per-branch: Y of the tree's base (for terrain placement)
@@ -667,9 +672,20 @@ export class InstancedForest {
       const treeBaseYArray = new Float32Array(this.branchTreeBaseY);
       barkGeo.setAttribute('instanceTreeBaseY', new THREE.InstancedBufferAttribute(treeBaseYArray, 1));
 
+      // On WebGPU, swap the WebGL ShaderMaterial for a TSL NodeMaterial.
+      // (We still constructed the WebGL mat above — it's immediately disposed
+      // here. Small one-time waste; keeps the port non-invasive and leaves
+      // the proven WebGL path intact for the default case.)
+      if (this.useWebGPU) {
+        barkMat.dispose();
+        const nodeMat = createBarkNodeMaterial(barkTexture, this.config);
+        barkMesh.material = nodeMat;
+        this.barkMat = nodeMat;
+      } else {
+        this.barkMat = barkMat;
+      }
       this.group.add(barkMesh);
       this.meshes.bark = barkMesh;
-      this.barkMat = barkMat;
     }
 
     // --- LEAVES ---
@@ -820,15 +836,25 @@ export class InstancedForest {
       const swayPhaseArray = new Float32Array(this.leafSwayPhase);
       leafMesh.geometry.setAttribute('instanceSwayPhase', new THREE.InstancedBufferAttribute(swayPhaseArray, 1));
 
+      if (this.useWebGPU) {
+        leafMat.dispose();
+        const nodeMat = createLeafNodeMaterial(leafTexture, this.config);
+        leafMesh.material = nodeMat;
+        this.leafMat = nodeMat;
+      } else {
+        this.leafMat = leafMat;
+      }
       this.group.add(leafMesh);
       this.meshes.leaves = leafMesh;
-      this.leafMat = leafMat;
     }
   }
 
-  /** Advance the leaf-sway time uniform. Call from the game loop. */
+  /** Advance the leaf-sway time uniform. Call from the game loop.
+   * No-op on WebGPU (v1 NodeMaterial port doesn't sway yet — T014 follow-up). */
   update(elapsedSeconds) {
-    if (this.leafMat) this.leafMat.uniforms.time.value = elapsedSeconds;
+    if (this.leafMat && this.leafMat.uniforms && this.leafMat.uniforms.time) {
+      this.leafMat.uniforms.time.value = elapsedSeconds;
+    }
   }
 
   dispose() {

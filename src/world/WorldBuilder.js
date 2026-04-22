@@ -176,6 +176,7 @@ export async function buildWorld(scene, renderer) {
     const rr = new InstancedForest({
       treeCount: positions.length,
       treePositions: positions,
+      useWebGPU: !!renderer.isWebGPURenderer,
       groundHeightFn: (x, z) => getTerrainHeight(x, z, arcs),
       groundFilterFn: (x, y, z) => y > WATER_LEVEL + 2 && y < 90,
       config: {
