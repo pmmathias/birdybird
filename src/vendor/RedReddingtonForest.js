@@ -678,7 +678,7 @@ export class InstancedForest {
       // the proven WebGL path intact for the default case.)
       if (this.useWebGPU) {
         barkMat.dispose();
-        const nodeMat = createBarkNodeMaterial(barkTexture, this.config);
+        const nodeMat = createBarkNodeMaterial(barkTexture, this.config, barkGeo);
         barkMesh.material = nodeMat;
         this.barkMat = nodeMat;
       } else {
@@ -824,21 +824,39 @@ export class InstancedForest {
       const colorArray = new Float32Array(this.leafColors);
       leafMesh.geometry.setAttribute('instanceColorAttr', new THREE.InstancedBufferAttribute(colorArray, 3));
 
-      const randomArray = new Float32Array(this.leafRandoms);
-      leafMesh.geometry.setAttribute('instanceRandom', new THREE.InstancedBufferAttribute(randomArray, 1));
+      // WebGPU caps at 8 vertex buffers. Position+normal+uv+instanceMatrix
+      // already claim 4–5 slots; adding 5 more float attributes tripped the
+      // limit ("Vertex buffer count (9) exceeds the maximum"). On WebGPU we
+      // pack random + swayPhase into a single vec2 and drop the wobble pair
+      // (static edge jitter — cosmetic only at flight altitude). The WebGL
+      // path keeps the original 5 individual attributes for exact parity.
+      if (this.useWebGPU) {
+        const packed = new Float32Array(this.leafRandoms.length * 2);
+        for (let i = 0; i < this.leafRandoms.length; i++) {
+          packed[i * 2]     = this.leafRandoms[i];
+          packed[i * 2 + 1] = this.leafSwayPhase[i];
+        }
+        leafMesh.geometry.setAttribute(
+          'instanceRandSway',
+          new THREE.InstancedBufferAttribute(packed, 2),
+        );
+      } else {
+        const randomArray = new Float32Array(this.leafRandoms);
+        leafMesh.geometry.setAttribute('instanceRandom', new THREE.InstancedBufferAttribute(randomArray, 1));
 
-      const wobbleXArray = new Float32Array(this.leafWobbleX);
-      leafMesh.geometry.setAttribute('instanceWobbleX', new THREE.InstancedBufferAttribute(wobbleXArray, 1));
+        const wobbleXArray = new Float32Array(this.leafWobbleX);
+        leafMesh.geometry.setAttribute('instanceWobbleX', new THREE.InstancedBufferAttribute(wobbleXArray, 1));
 
-      const wobbleYArray = new Float32Array(this.leafWobbleY);
-      leafMesh.geometry.setAttribute('instanceWobbleY', new THREE.InstancedBufferAttribute(wobbleYArray, 1));
+        const wobbleYArray = new Float32Array(this.leafWobbleY);
+        leafMesh.geometry.setAttribute('instanceWobbleY', new THREE.InstancedBufferAttribute(wobbleYArray, 1));
 
-      const swayPhaseArray = new Float32Array(this.leafSwayPhase);
-      leafMesh.geometry.setAttribute('instanceSwayPhase', new THREE.InstancedBufferAttribute(swayPhaseArray, 1));
+        const swayPhaseArray = new Float32Array(this.leafSwayPhase);
+        leafMesh.geometry.setAttribute('instanceSwayPhase', new THREE.InstancedBufferAttribute(swayPhaseArray, 1));
+      }
 
       if (this.useWebGPU) {
         leafMat.dispose();
-        const nodeMat = createLeafNodeMaterial(leafTexture, this.config);
+        const nodeMat = createLeafNodeMaterial(leafTexture, this.config, leafMesh.geometry);
         leafMesh.material = nodeMat;
         this.leafMat = nodeMat;
       } else {
