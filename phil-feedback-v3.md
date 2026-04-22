@@ -4,8 +4,10 @@ Hi Phil,
 
 Ocean4 is now live in birdybird, a bird-flight simulator with tilt controls
 for mobile browsers: https://pmmathias.github.io/birdybird/ — WebGPU path
-kicks in automatically on modern Chrome/Safari. Attribution in the credits
-overlay and in `src/vendor/Ocean4.js` (CC BY-NC-SA 3.0 header preserved).
+kicks in automatically on modern Chrome/Safari (append `?renderer=webgl`
+for the pre-Ocean4 Gerstner fallback if you want a quick A/B). Attribution
+in the credits overlay and in `src/vendor/Ocean4.js` (CC BY-NC-SA 3.0
+header preserved).
 
 Two things you may find useful, since birdybird stresses the module
 differently than your sdem_ocean4_gpu demo (we look *down* at the sea from
