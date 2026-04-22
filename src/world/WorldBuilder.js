@@ -197,22 +197,120 @@ export async function buildWorld(scene, renderer) {
     });
     const result = rr.generate(leafTex, barkTex);
     console.log(`  RedReddington forest: ${result.stats.trees} trees in ${centers.length} clusters, ${result.stats.branches} branches, ${result.stats.leaves} leaves`);
-    rr.group.name = 'rr-forest';
 
-    // World-spanning bounding sphere so Three.js doesn't wrongly cull the
-    // forest when the camera is aimed away from world origin (default
-    // bounding is just the unit-cylinder geometry).
-    const worldSphere = new THREE.Sphere(new THREE.Vector3(0, 40, 0), WORLD_HALF * 1.5);
-    if (rr.meshes.bark) {
-      rr.meshes.bark.geometry.boundingSphere = worldSphere.clone();
-      rr.meshes.bark.frustumCulled = true;
-    }
-    if (rr.meshes.leaves) {
-      rr.meshes.leaves.geometry.boundingSphere = worldSphere.clone();
-      rr.meshes.leaves.frustumCulled = true;
-    }
+    // Split the single monolithic bark/leaf InstancedMeshes into per-cluster
+    // sub-meshes with tight bounding spheres. Before this split, the forest
+    // was one mesh with a world-spanning bounding sphere → Three.js frustum
+    // culling never kicked in and the vertex shader ran for ~1M instances
+    // every frame, even when the camera looked at an empty quadrant. With
+    // per-cluster bounding, only visible clusters draw (≈3× FPS on WebGPU
+    // in perf-bench).
+    const splitGroup = splitForestByClusters(rr.meshes.bark, rr.meshes.leaves, centers);
+    splitGroup.name = 'rr-forest';
+    return { group: splitGroup, updater: rr };
+  }
 
-    return { group: rr.group, updater: rr };
+  // Post-process: rebuild the forest as N per-cluster InstancedMeshes. Each
+  // sub-mesh owns only its cluster's instances and gets a tight boundingSphere
+  // so three.js frustum culling can skip whole clusters on oblique views.
+  //
+  // Non-instance vertex attributes (position/normal/uv) are SHARED across all
+  // sub-meshes — only the InstancedBufferAttributes (instanceMatrix + any
+  // per-instance attrs like instanceTreeBaseY, instanceColorAttr, etc) are
+  // sliced per cluster. Material is shared too. Memory cost is ~20 extra
+  // geometry wrappers + 20 extra instance-attribute buffers, but each is
+  // 1/20th the size of the monolithic version.
+  function splitForestByClusters(barkMesh, leafMesh, centers) {
+    const group = new THREE.Group();
+    if (!barkMesh && !leafMesh) return group;
+
+    // For each source instance, find the closest cluster center (by XZ).
+    const assignToClusters = (src) => {
+      const buckets = centers.map(() => []);
+      const mat = new THREE.Matrix4();
+      for (let i = 0; i < src.count; i++) {
+        src.getMatrixAt(i, mat);
+        const x = mat.elements[12];
+        const z = mat.elements[14];
+        let best = 0;
+        let bestD = Infinity;
+        for (let c = 0; c < centers.length; c++) {
+          const dx = x - centers[c].x;
+          const dz = z - centers[c].z;
+          const d = dx * dx + dz * dz;
+          if (d < bestD) { bestD = d; best = c; }
+        }
+        buckets[best].push(i);
+      }
+      return buckets;
+    };
+
+    const splitOne = (src, kind) => {
+      const buckets = assignToClusters(src);
+      const instanceAttrNames = [];
+      for (const name in src.geometry.attributes) {
+        if (src.geometry.attributes[name].isInstancedBufferAttribute) {
+          instanceAttrNames.push(name);
+        }
+      }
+      const sharedAttrs = {};
+      for (const name in src.geometry.attributes) {
+        if (!src.geometry.attributes[name].isInstancedBufferAttribute) {
+          sharedAttrs[name] = src.geometry.attributes[name];
+        }
+      }
+      const sharedIndex = src.geometry.index;
+      // Single-tree bounding radius — bark geometry uses it as the per-instance
+      // sphere; three.js expands it by each instance matrix during culling.
+      const perInstanceRadius = kind === 'bark' ? 20 : 3;
+
+      const mat = new THREE.Matrix4();
+      for (let c = 0; c < centers.length; c++) {
+        const ids = buckets[c];
+        if (ids.length === 0) continue;
+
+        const subGeo = new THREE.BufferGeometry();
+        for (const name in sharedAttrs) subGeo.setAttribute(name, sharedAttrs[name]);
+        if (sharedIndex) subGeo.setIndex(sharedIndex);
+
+        // Slice per-instance attributes down to this cluster's ids.
+        for (const name of instanceAttrNames) {
+          const srcAttr = src.geometry.attributes[name];
+          const size = srcAttr.itemSize;
+          const arr = new Float32Array(ids.length * size);
+          for (let j = 0; j < ids.length; j++) {
+            const srcIdx = ids[j] * size;
+            for (let k = 0; k < size; k++) arr[j * size + k] = srcAttr.array[srcIdx + k];
+          }
+          subGeo.setAttribute(name, new THREE.InstancedBufferAttribute(arr, size));
+        }
+
+        // Geometry-level sphere covers one tree's extent around its local
+        // origin. Three.js InstancedMesh.computeBoundingSphere() then
+        // expands it by all instance matrices → tight cluster-sized sphere.
+        subGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, perInstanceRadius * 0.5, 0), perInstanceRadius);
+
+        const sub = new THREE.InstancedMesh(subGeo, src.material, ids.length);
+        sub.name = `rr-${kind}-c${c}`;
+        sub.frustumCulled = true;
+        sub.castShadow = false;
+        sub.receiveShadow = false;
+        for (let j = 0; j < ids.length; j++) {
+          src.getMatrixAt(ids[j], mat);
+          sub.setMatrixAt(j, mat);
+        }
+        sub.instanceMatrix.needsUpdate = true;
+        sub.computeBoundingSphere();
+        group.add(sub);
+      }
+      // Original monolithic geometry no longer needed.
+      src.geometry.dispose();
+    };
+
+    if (barkMesh) splitOne(barkMesh, 'bark');
+    if (leafMesh) splitOne(leafMesh, 'leaf');
+    console.log(`  Forest split into ${group.children.length} cluster sub-meshes`);
+    return group;
   }
 
   let rrUpdater = null;
