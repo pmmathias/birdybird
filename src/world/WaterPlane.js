@@ -119,52 +119,62 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
 
   const material = new MeshBasicNodeMaterial();
   // Raw displacement — Phil uses 1:1, values are in world meters already.
-  material.positionNode = positionLocal.add(
-    texture(waves.dispMapTexture, uv()).xyz,
-  );
-  material.normalNode = normalMap(texture(waves.normMapTexture, uv()), new THREE.Vector2(1, 1));
+  const dispSample = texture(waves.dispMapTexture, uv());
+  material.positionNode = positionLocal.add(dispSample.xyz);
+  // Phil's Ocean4 stores WORLD-space normals packed (x, z, y) in RGB, 0..1
+  // range. We sample directly in the color shader (see below) — setting
+  // material.normalNode via normalMap() gave a near-flat result because
+  // Phil's map isn't in tangent space, so normalMap's tangent transform
+  // was neutering the perturbation.
 
   const uSunDir     = uniform(new THREE.Vector3().copy(sun.position).normalize());
   const uSunColor   = uniform(new THREE.Color(0xfff0d4));
-  const uWaterColor = uniform(new THREE.Color(0x003050));
-  const uDistortion = uniform(IS_MOBILE ? 0.05 : 0.07);
+  // Sky-blue tint for wave crests (where normal points up) and deep water for
+  // slopes. The previous single-color 0x003050 was so dark that top-down views
+  // couldn't distinguish crests from troughs — the iFFT waves were there, just
+  // invisible in the shading.
+  const uDeepColor  = uniform(new THREE.Color(0x012238));
+  const uSkyColor   = uniform(new THREE.Color(0x4d7eaa));
 
-  // Create a TSL reflector here, outside the Fn so we can attach its
-  // virtual-camera target to the mesh below. The reflector renders the
-  // scene from below the water plane into a texture that we then sample
-  // distorted by the iFFT normal for the characteristic "wavy mirror" look.
   const mirrorSampler = reflector();
   mirrorSampler.reflector.resolutionScale = IS_MOBILE ? 0.4 : 0.6;
 
   material.colorNode = Fn(() => {
     const wp = positionWorld;
-    const viewDir = normalize(cameraPosition.sub(wp));
-    const N = normalize(normalWorld);
+    const V = normalize(cameraPosition.sub(wp));
     const L = normalize(uSunDir);
 
-    // Distort the mirror UVs by the world-space normal's XZ components so the
-    // iFFT waves warp the reflection (copied from WaterMesh's approach).
-    mirrorSampler.uvNode = mirrorSampler.uvNode.add(N.xz.mul(uDistortion));
+    // Sample Phil's normal map directly — WORLD-space normal packed (x, z, y).
+    const nTex = texture(waves.normMapTexture, uv()).xyz.mul(2.0).sub(1.0);
+    const N = normalize(vec3(nTex.x, nTex.z, nTex.y));
 
-    // Fresnel reflectance (Schlick approximation)
-    const theta = max(dot(viewDir, N), 0.0);
-    const rf0 = float(0.02);
+    // Distort the mirror UVs strongly by the normal's world XZ — this is what
+    // makes crests/troughs visible as shimmer in the reflection.
+    mirrorSampler.uvNode = mirrorSampler.uvNode.add(N.xz.mul(0.4));
+
+    // "Upness" of the normal is 1 on flat water and < 1 on wave slopes. Used
+    // to fade between sky-blue (calm crest) and deep-blue (tilted face) so
+    // waves are clearly legible even from directly above.
+    const upness = max(float(0.0), N.y);
+    const base = mix(uDeepColor, uSkyColor, pow(upness, 2.0));
+
+    // Lambert + sun — subtle but helps sculpt the waves with shadow on
+    // sun-averted faces.
+    const lambert = max(float(0.0), dot(N, L)).mul(0.45).add(0.55);
+    const lit = base.mul(lambert);
+
+    // Sun glint (specular) — bright highlight on crests that face the sun.
+    const R = TSL.reflect(uSunDir.negate(), N);
+    const glint = pow(max(float(0.0), dot(R, V)), 90.0).mul(uSunColor).mul(3.0);
+
+    // Fresnel — at grazing angles, reflect sky/env; near-vertical view uses
+    // the lit water base. 0.04 base reflectance per Schlick for water.
+    const theta = max(float(0.0), dot(V, N));
+    const rf0 = float(0.04);
     const reflectance = pow(float(1.0).sub(theta), 5.0).mul(float(1.0).sub(rf0)).add(rf0);
 
-    // Specular sun highlight (still useful on top of the reflection)
-    const R = TSL.reflect(uSunDir.negate(), N);
-    const RdotV = max(dot(R, viewDir), 0.0);
-    const specular = pow(RdotV, 120.0).mul(uSunColor).mul(2.0);
-
-    // Water-from-below scattering (deep water color softened by sun tint)
-    const diffuseLight = max(dot(L, N), 0.0).mul(uSunColor).mul(0.5);
-    const scatter = max(0.0, dot(N, viewDir)).mul(uWaterColor);
-    const albedo = mix(
-      uSunColor.mul(diffuseLight).mul(0.3).add(scatter),
-      mirrorSampler.rgb.add(specular),
-      reflectance,
-    );
-    return albedo;
+    const reflected = mirrorSampler.rgb.add(glint);
+    return mix(lit.add(glint.mul(0.3)), reflected, reflectance);
   })();
 
   const mesh = new THREE.Mesh(geometry, material);
