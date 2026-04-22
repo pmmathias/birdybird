@@ -584,20 +584,26 @@
     document.getElementById('credits-close').addEventListener('click', () => ov.classList.remove('open'));
     ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('open'); });
 
-    // Water mode indicator — updated by WaterPlane.js via window.__waterPath
+    // Water + renderer indicators — updated via window.__waterPath / __rendererPath
     function refreshWaterMode() {
       const label = document.getElementById('water-mode-label');
       const dot = document.querySelector('#water-mode .dot');
       const path = window.__waterPath;
+      const renderer = window.__rendererPath;
       if (!label || !dot) return;
+      const rendererSuffix = renderer && renderer !== 'WebGL2' ? ` · ${renderer}` : '';
       if (path === 'iFFT') {
-        label.textContent = 'iFFT';
+        label.textContent = 'iFFT' + rendererSuffix;
         dot.classList.remove('fallback');
-        document.getElementById('water-mode').title = 'Waves: FFT-based (Ocean3)';
+        document.getElementById('water-mode').title = 'Waves: FFT-based (Ocean3) · Renderer: ' + (renderer || 'WebGL2');
       } else if (path === 'Gerstner') {
-        label.textContent = 'Gerstner';
+        label.textContent = 'Gerstner' + rendererSuffix;
         dot.classList.add('fallback');
-        document.getElementById('water-mode').title = 'Waves: Gerstner fallback (iFFT unavailable on this device)';
+        document.getElementById('water-mode').title = 'Waves: Gerstner fallback · Renderer: ' + (renderer || 'WebGL2');
+      } else if (path === 'Gerstner (WebGPU)') {
+        label.textContent = 'Gerstner · WebGPU';
+        dot.classList.add('fallback');
+        document.getElementById('water-mode').title = 'Waves: TSL Gerstner on WebGPURenderer';
       } else {
         label.textContent = '…';
       }
