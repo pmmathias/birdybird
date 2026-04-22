@@ -107,8 +107,11 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   const waves = new Ocean4(renderer, {
     Res: IS_MOBILE ? 256 : 512,
     Siz: WAVE_TILE,
-    WSp: 20, WHd: 295, Chp: 2,
-    Spd: 1.0,
+    // Phillips-Spektrum: dominante Wellenlänge ≈ 2π·WSp²/g.
+    // WSp 20 → ~256m (Dünung / Monsterwellen-Optik).
+    // WSp 12 → ~92m, plus Chp 2.5 für knackigere Kämme = kurze Ostsee-Wellen.
+    WSp: 12, WHd: 295, Chp: 2.5,
+    Spd: 1.2,
   });
 
   const geometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, SEGMENTS, SEGMENTS);
