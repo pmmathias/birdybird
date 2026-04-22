@@ -18,9 +18,12 @@ export async function createRenderer() {
   const urlForce = urlParams.get('renderer');           // 'webgpu' | 'webgl' | null
   const hasWebGPU = !!navigator.gpu;
 
-  // Only try WebGPU on explicit opt-in. We do NOT default to WebGPU on navigator.gpu
-  // presence yet — too many assets need TSL ports first (see WEBGPU-MIGRATION-README).
-  const wantsWebGPU = urlForce === 'webgpu' && hasWebGPU;
+  // WebGPU is now the default path (Phil Crowther's Ocean4 iFFT + TSL forest
+  // port land all the visible visual upgrades there). Falls back to WebGL2
+  // automatically if navigator.gpu is missing or WebGPURenderer.init() fails
+  // (older mobile Safari, locked-down browsers). Force either path with
+  // `?renderer=webgpu` or `?renderer=webgl`.
+  const wantsWebGPU = urlForce === 'webgpu' || (urlForce !== 'webgl' && hasWebGPU);
 
   const renderer = wantsWebGPU
     ? await _createWebGPURenderer()
