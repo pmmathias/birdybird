@@ -1,15 +1,17 @@
 import * as THREE from 'three';
 
-// Shared geometry + material — cheap to render many instances
+// Shared geometry + material — cheap to render many instances.
+// MeshBasicMaterial keeps rings visible on WebGPU too: MeshStandardMaterial
+// needs an environment map for its metalness term, and we currently skip
+// PMREM on WebGPU (r184 SkyMesh bug), so the metalness lobe rendered black
+// and swallowed most of the ring. Basic + bright color (toneMapped off so
+// it pops) gets the glowing look without lighting data.
 const RING_GEOMETRY = new THREE.TorusGeometry(6, 0.6, 12, 28);
-const RING_MATERIAL = new THREE.MeshStandardMaterial({
-  color: 0xffdd44,
-  emissive: 0xffaa22,
-  emissiveIntensity: 0.85,
-  metalness: 0.35,
-  roughness: 0.3,
+const RING_MATERIAL = new THREE.MeshBasicMaterial({
+  color: 0xffd050,
   transparent: true,
-  opacity: 0.92,
+  opacity: 0.95,
+  toneMapped: false,
 });
 
 /** A single collectible ring. Shares geometry/material across instances. */
