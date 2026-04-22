@@ -50,12 +50,12 @@ Reddit verlinkbar (Twitter, ki-mathias.de, Discord etc.).
 
 ## Phase 2 — Erste Sucht-Schleife (~1 Woche)
 
-| T | Titel |
-|---|---|
-| T008 | Ring-Rush-Modus: Ringe in der Luft, Timer, +3s pro Ring |
-| T009 | Restart-Flow — 30s-Runs, sofort wieder starten |
-| T010 | Score + Endscreen mit "Tap to retry" |
-| T011 | Visuelle Effekte: Ring-Hit, Speed-Rush-FOV, Trail |
+| T | Titel | Status |
+|---|---|---|
+| T005 | Ring-Rush-Modus: Ringe, Timer-Reset pro Ring, Game-Over, Highscore, Biome-Level-Up | **done ✓** |
+| T009 | Restart-Flow — 30s-Runs, sofort wieder starten | done ✓ (via T005 Retry-Button) |
+| T010 | Score + Endscreen mit "Tap to retry" | done ✓ (via T005) |
+| T011 | Visuelle Effekte: Ring-Hit, Speed-Rush-FOV, Trail | partial (Sparkle-Burst + HUD-Pulse, Trail offen) |
 
 ## Phase 3 — Meta-Progression (~1-2 Wochen)
 
