@@ -11,6 +11,7 @@ import { UnderwaterWorld } from './Underwater.js';
 import { Octree } from '../spatial/Octree.js';
 import { FrustumCuller } from '../spatial/FrustumCuller.js';
 import { createTerrainMaterial } from './TerrainShader.js';
+import { createTerrainMaterialNode } from './TerrainShaderNode.js';
 import {
   GRASS_TEXTURE_REPEAT, WATER_LEVEL, FOG_NEAR, FOG_FAR,
   WORLD_HALF,
@@ -54,7 +55,8 @@ export async function buildWorld(scene, renderer) {
   };
 
   // --- Terrain material (custom shader with height-based blending) ---
-  const terrainMaterial = createTerrainMaterial(textures, {
+  // TSL NodeMaterial on WebGPU, GLSL ShaderMaterial on WebGL
+  const terrainParams = {
     waterLevel: WATER_LEVEL,
     sandEnd: WATER_LEVEL + 8,
     grassEnd: 35,
@@ -63,7 +65,10 @@ export async function buildWorld(scene, renderer) {
     fogColor,
     fogNear: FOG_NEAR,
     fogFar: FOG_FAR,
-  });
+  };
+  const terrainMaterial = renderer.isWebGPURenderer
+    ? createTerrainMaterialNode(textures, terrainParams)
+    : createTerrainMaterial(textures, terrainParams);
 
   // --- Terrain ---
   console.time('Terrain');
