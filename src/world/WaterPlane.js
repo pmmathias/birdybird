@@ -147,8 +147,9 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   const mirrorSampler = reflector();
   mirrorSampler.reflector.resolutionScale = IS_MOBILE ? 0.4 : 0.6;
 
-  const { smoothstep } = TSL;
+  const { smoothstep, abs } = TSL;
   const uFoamColor = uniform(new THREE.Color(0xf4f8ff));
+  const uWaterLevel = uniform(WATER_LEVEL);
 
   material.colorNode = Fn(() => {
     const wp = positionWorld;
@@ -184,10 +185,17 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
     const rf0 = float(0.04);
     const reflectance = pow(float(1.0).sub(theta), 5.0).mul(float(1.0).sub(rf0)).add(rf0);
 
-    // Whitecap foam on steep wave faces — where normal.y drops below ~0.85,
-    // the surface is tilted enough that a real breaking crest would be there.
-    // Cheap "Gischt" effect without needing the scene depth buffer.
-    const foamFactor = smoothstep(float(0.88), float(0.65), N.y);
+    // Whitecap foam — two signals combined:
+    //   a) WAVE HEIGHT (positionWorld.y is interpolated per-vertex from the
+    //      displaced geometry, so mipmap filtering on the normal map can't
+    //      wash it out like it does slopeFoam at flight altitude). Only
+    //      positive side = crests get foam, troughs stay dark.
+    //   b) SLOPE: steep faces where N.y drops below ~0.85 — gets foam on
+    //      breaking wave flanks up close where the normal map is still sharp.
+    const waveH = wp.y.sub(uWaterLevel);
+    const heightFoam = smoothstep(float(0.55), float(1.1), waveH);
+    const slopeFoam  = smoothstep(float(0.90), float(0.70), N.y);
+    const foamFactor = max(heightFoam, slopeFoam).mul(0.85);
     const lit_with_foam = mix(lit, uFoamColor, foamFactor);
 
     const reflected = mirrorSampler.rgb.add(glint);
