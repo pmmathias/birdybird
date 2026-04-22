@@ -31,6 +31,10 @@ export async function createWaterPlane(sun, renderer) {
     || navigator.maxTouchPoints > 1;
   const isWebGPU = !!renderer.isWebGPURenderer;
 
+  // Non-WebGPU paths: original 24km plane (WebGL Water.js adds its own mirror
+  // pass, fog hides the distant seam). WebGPU iFFT path overrides these in
+  // _createIFFTWaterWebGPU so vertex density matches Phil's demo where the
+  // plane IS exactly the FFT tile (384 segs / 2400m = 6.25m per vertex).
   const PLANE_SIZE = WORLD_SIZE * 4;
   const SEGMENTS = IS_MOBILE ? 128 : 256;
   const REFLECTION_SIZE = IS_MOBILE ? 256 : 512;
@@ -79,7 +83,7 @@ function _checkIFFTSupport(renderer) {
 // ------------------------------------------------------------------
 // Path 3a: WebGPU iFFT via Phil Crowther's Ocean4 (compute shaders)
 // ------------------------------------------------------------------
-function _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE) {
+function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegments, IS_MOBILE) {
   const {
     Fn, positionLocal, texture, normalMap, uv,
     vec2, vec3, float, uniform,
@@ -87,20 +91,26 @@ function _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE) 
     normalize, dot, max, mix, pow, reflector,
   } = TSL;
 
-  const WAVE_TILE = 2400;
-  // Keep Ocean4 defaults conservative — its displacement texture is already in
-  // world meters (wave amplitude scales ~WSp²/g, so bumping wind blows it up
-  // fast). Modest boost over the stock 18/1.5: slightly more swell, slightly
-  // crisper crests, without the "tsunami from camera angle" effect.
+  // Phil's default tile + params verbatim (from sdem_ocean4_gpu.html):
+  //   GrdSiz 2400, GrdRes 512, GrdSeg 384, WSp 20, Chp 2.
+  // He uses PlaneGeometry(2400,2400,384,384) — 1 tile per plane, 6.25m between
+  // vertices. With our previous 24000m plane × 256 segments (93.75m between
+  // vertices) the geometry could only represent very low-frequency swell; the
+  // high-freq crests in Ocean4's displacement map got averaged out because
+  // there just weren't enough vertices to sample them. Match Phil's vertex
+  // density instead.
+  const WAVE_TILE  = 2400;
+  const TILE_COUNT = 4;                         // 4×4 grid → 9600m visible water
+  const PLANE_SIZE = WAVE_TILE * TILE_COUNT;    // 9600m
+  const SEG_PER_TILE = IS_MOBILE ? 192 : 384;   // Phil's 384 on desktop; half on mobile
+  const SEGMENTS     = SEG_PER_TILE * TILE_COUNT;
   const waves = new Ocean4(renderer, {
     Res: IS_MOBILE ? 256 : 512,
     Siz: WAVE_TILE,
-    WSp: 20, WHd: 295, Chp: 2.0,
+    WSp: 20, WHd: 295, Chp: 2,
     Spd: 1.0,
   });
 
-  // Tiled UVs for displacement wrapping
-  const TILE_COUNT = PLANE_SIZE / WAVE_TILE;
   const geometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, SEGMENTS, SEGMENTS);
   const uvAttr = geometry.attributes.uv;
   for (let i = 0; i < uvAttr.count; i++) {
@@ -108,14 +118,11 @@ function _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE) 
   }
 
   const material = new MeshBasicNodeMaterial();
-  // Raw displacement — no extra multiplier. The texture values are already
-  // in world-space meters; Phil's demo uses them 1:1.
+  // Raw displacement — Phil uses 1:1, values are in world meters already.
   material.positionNode = positionLocal.add(
     texture(waves.dispMapTexture, uv()).xyz,
   );
-  // Normal-map strength ×1.3 so lighting/reflections read wavy without adding
-  // any geometric amplification.
-  material.normalNode = normalMap(texture(waves.normMapTexture, uv()), new THREE.Vector2(1.3, 1.3));
+  material.normalNode = normalMap(texture(waves.normMapTexture, uv()), new THREE.Vector2(1, 1));
 
   const uSunDir     = uniform(new THREE.Vector3().copy(sun.position).normalize());
   const uSunColor   = uniform(new THREE.Color(0xfff0d4));
