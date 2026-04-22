@@ -168,6 +168,10 @@ export async function buildWorld(scene, renderer) {
 
   function buildRrForest() {
     const count = countOverride || (IS_MOBILE ? 600 : 2000);
+    // Cluster count tuning explored in perf-bench: fewer clusters (8) helped
+    // air-over-land (+72%) but hurt inside-forest (-56%) because dense-view
+    // scenarios benefit most from fine-grained frustum culling. 20 clusters
+    // is the best overall compromise for both WebGL2 and WebGPU.
     const clusterCount = clustersOverride || Math.max(8, Math.round(count / 100));
     const leafTex = createLeafTexture();
     const barkTex = createBarkTexture();
