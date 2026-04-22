@@ -88,10 +88,14 @@ function _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE) 
   } = TSL;
 
   const WAVE_TILE = 2400;
+  // Keep Ocean4 defaults conservative — its displacement texture is already in
+  // world meters (wave amplitude scales ~WSp²/g, so bumping wind blows it up
+  // fast). Modest boost over the stock 18/1.5: slightly more swell, slightly
+  // crisper crests, without the "tsunami from camera angle" effect.
   const waves = new Ocean4(renderer, {
     Res: IS_MOBILE ? 256 : 512,
     Siz: WAVE_TILE,
-    WSp: 18, WHd: 295, Chp: 1.5,
+    WSp: 20, WHd: 295, Chp: 2.0,
     Spd: 1.0,
   });
 
@@ -104,13 +108,19 @@ function _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE) 
   }
 
   const material = new MeshBasicNodeMaterial();
-  material.positionNode = positionLocal.add(texture(waves.dispMapTexture, uv()).xyz);
-  material.normalNode = normalMap(texture(waves.normMapTexture, uv()), new THREE.Vector2(1, 1));
+  // Raw displacement — no extra multiplier. The texture values are already
+  // in world-space meters; Phil's demo uses them 1:1.
+  material.positionNode = positionLocal.add(
+    texture(waves.dispMapTexture, uv()).xyz,
+  );
+  // Normal-map strength ×1.3 so lighting/reflections read wavy without adding
+  // any geometric amplification.
+  material.normalNode = normalMap(texture(waves.normMapTexture, uv()), new THREE.Vector2(1.3, 1.3));
 
   const uSunDir     = uniform(new THREE.Vector3().copy(sun.position).normalize());
   const uSunColor   = uniform(new THREE.Color(0xfff0d4));
   const uWaterColor = uniform(new THREE.Color(0x003050));
-  const uDistortion = uniform(IS_MOBILE ? 0.03 : 0.05);
+  const uDistortion = uniform(IS_MOBILE ? 0.05 : 0.07);
 
   // Create a TSL reflector here, outside the Fn so we can attach its
   // virtual-camera target to the mesh below. The reflector renders the
