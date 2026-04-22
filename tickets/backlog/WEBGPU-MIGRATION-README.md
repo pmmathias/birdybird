@@ -53,16 +53,38 @@ Regression auf bestehendem WebGL-Pfad.
 - iOS <18.2 Support via WebGPU (fällt immer auf WebGL zurück)
 - Devvit-Embedding-Kompatibilität (separate Strategie-B-Frage)
 
-## Status
+## Status (Stand 2026-04-22)
 
-- [x] Branch `webgpu-port` erstellt
-- [ ] T010 — WebGPU-Spike
-- [ ] T011 — Sky + PMREM
-- [ ] T012 — Terrain-Shader → TSL
-- [ ] T013 — Clouds + Houses
-- [ ] T014 — Forest → TSL
-- [ ] T015 — Water Gerstner-TSL
-- [ ] T016 — Ocean3-Entscheidung
-- [ ] T019 — Sekundäre Shader
-- [ ] T017 — Mobile-Safari-Verifikation
-- [ ] T018 — Benchmark + Merge
+- [x] Branch `webgpu-port` erstellt (Commit c02b3fc)
+- [x] T010 — WebGPU-Spike (f069319)
+- [x] T011 — Sky + PMREM (SkyMesh, PMREM skipped auf WebGPU — 4a4887b)
+- [x] T012 — TerrainShader → TSL NodeMaterial (ee620d8)
+- [x] T014 — Forest → TSL (v1 ohne Root-Spread/Sway/LOD-Cull — 7e58800)
+- [x] T015 — Water Gerstner-TSL (WaterMesh + positionNode — 4a4887b)
+- [x] T016 — Ocean3-Entscheidung (skip auf WebGPU — 4a4887b)
+- [x] T013 — Clouds + Houses — verified ohne Änderung (Standard-Materials)
+- [x] T019 — Sekundäre Shader — verified keine Fehler auf WebGPU-Pfad
+- [x] T018 — Benchmark in Headless Chromium: WebGL 55 FPS, WebGPU 43 FPS
+  - Headless Chromium bevorzugt WebGL2; echte Device-Perf-Messung = T017
+- [ ] T017 — Mobile-Safari Real-Device-Verifikation (iOS 26+ Ziel)
+- [ ] **Merge `webgpu-port` → `main`**: Branch bleibt als Experiment erhalten,
+      WebGL-Pfad auf `main` bleibt führend. Merge nach T017.
+
+## Ergebnis-Summary
+
+Die komplette App läuft auf beiden Renderern:
+
+**Funktioniert auf WebGPU:**
+- Sky (SkyMesh), Terrain (TSL 5-Layer-Blend), Water (WaterMesh + Gerstner),
+  Forest (bark + leaves, grundlegendes Material), Houses, Hotel-Pools,
+  Clouds, Bird-Model, Rings, Flock, HUD, NestQuest, RingRush
+
+**V2-Kandidaten (aktuell nur auf WebGL):**
+- Forest: Root-Spread, Sway, LOD-Cull, HSL-Instance-Jitter, Distance-Tint
+- PMREM-Environment-Map (SkyMesh crasht Three.js r184 PMREM)
+- Ocean3 iFFT (CC BY-NC-SA — bleibt WebGL-exklusiv bis T007)
+
+**Bundle-Kosten:** +150 kB gzip durch eager three/webgpu-Import (statische
+Imports nötig wegen Race-Condition mit top-level await + dynamic import
+`'three/webgpu'` in der main.js Bootkette). Refactor zu `manualChunks` +
+`import.meta.glob` als Follow-up.
