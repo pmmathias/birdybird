@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { Water } from 'three/addons/objects/Water.js';
 import { WaterMesh } from 'three/addons/objects/WaterMesh.js';
 import * as TSL from 'three/tsl';
+import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { Ocean } from '../vendor/Ocean3.js';
+import { Ocean as Ocean4 } from '../vendor/Ocean4.js';
 import { WORLD_SIZE, WATER_LEVEL } from '../constants.js';
 
 /**
@@ -16,10 +18,13 @@ import { WORLD_SIZE, WATER_LEVEL } from '../constants.js';
  *    Gerstner wave GLSL injected into Water.js vertex shader
  *
  * 3. WebGPU (iOS 26+, modern Chrome/Safari):
- *    WaterMesh (TSL NodeMaterial, drop-in equivalent of Water.js) with
- *    Gerstner displacement via positionNode override
- *    → Ocean3 iFFT NOT used on WebGPU (license prevents WGSL port;
- *      see T007 for Phil's native WebGPU Ocean module as future path)
+ *    Phil Crowther's Ocean4 — WGSL compute-shader iFFT port of the same
+ *    algorithm, displacement + normal textures fed into a TSL
+ *    MeshStandardNodeMaterial. This is the whole point of the WebGPU
+ *    migration: real iFFT waves on mobile GPUs that iOS Safari 26+ can
+ *    finally run. (Ocean4 © Phil Crowther, CC BY-NC-SA 3.0 — non-commercial
+ *    project, attribution kept in credits overlay.)
+ *    Falls back to Gerstner if Ocean4 init fails (compute support missing).
  */
 export async function createWaterPlane(sun, renderer) {
   const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
@@ -31,9 +36,17 @@ export async function createWaterPlane(sun, renderer) {
   const REFLECTION_SIZE = IS_MOBILE ? 256 : 512;
 
   if (isWebGPU) {
-    window.__waterPath = 'Gerstner (WebGPU)';
-    console.log('Water: WebGPU → WaterMesh + TSL Gerstner');
-    return _createWebGPUWater(sun, PLANE_SIZE, SEGMENTS, IS_MOBILE);
+    // Try iFFT first; Gerstner is only the fallback.
+    try {
+      const water = _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE);
+      window.__waterPath = 'iFFT (WebGPU)';
+      console.log('Water: WebGPU → Ocean4 iFFT compute');
+      return water;
+    } catch (err) {
+      console.warn('Ocean4 init failed, falling back to Gerstner:', err);
+      window.__waterPath = 'Gerstner (WebGPU)';
+      return _createWebGPUWater(sun, PLANE_SIZE, SEGMENTS, IS_MOBILE);
+    }
   }
 
   // WebGL paths below
@@ -64,7 +77,55 @@ function _checkIFFTSupport(renderer) {
 }
 
 // ------------------------------------------------------------------
-// Path 3: WebGPU via WaterMesh + TSL Gerstner
+// Path 3a: WebGPU iFFT via Phil Crowther's Ocean4 (compute shaders)
+// ------------------------------------------------------------------
+function _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE) {
+  const { positionLocal, texture, normalMap, uv } = TSL;
+
+  const WAVE_TILE = 2400; // meters per iFFT tile — same as Ocean3 for visual parity
+  const waves = new Ocean4(renderer, {
+    Res: IS_MOBILE ? 256 : 512,
+    Siz: WAVE_TILE,
+    WSp: 18, WHd: 295, Chp: 1.5,
+    Spd: 1.0,
+  });
+
+  // Geometry with tiled UVs so the iFFT displacement wraps across the big plane.
+  const TILE_COUNT = PLANE_SIZE / WAVE_TILE;
+  const geometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, SEGMENTS, SEGMENTS);
+  const uvAttr = geometry.attributes.uv;
+  for (let i = 0; i < uvAttr.count; i++) {
+    uvAttr.setXY(i, uvAttr.getX(i) * TILE_COUNT, uvAttr.getY(i) * TILE_COUNT);
+  }
+
+  // MeshStandardNodeMaterial with iFFT displacement + normal.
+  // positionLocal gets the xyz displacement sampled from the compute-shader
+  // output texture. normalNode uses tangent-space normals from the normal map.
+  const material = new MeshStandardNodeMaterial({
+    color: new THREE.Color(0x003050),
+    metalness: 0.0,
+    roughness: 0.15,
+    transparent: false,
+  });
+  material.positionNode = positionLocal.add(texture(waves.dispMapTexture, uv()).xyz);
+  material.normalNode = normalMap(texture(waves.normMapTexture, uv()), new THREE.Vector2(1, 1));
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = WATER_LEVEL;
+
+  const waterGroup = new THREE.Group();
+  waterGroup.add(mesh);
+
+  function update(/* dt */) {
+    // Ocean4.update() pulls TSL `time` internally — no dt needed.
+    waves.update();
+  }
+  return { mesh: waterGroup, update };
+}
+
+// ------------------------------------------------------------------
+// Path 3b: WebGPU Gerstner fallback via WaterMesh
 // ------------------------------------------------------------------
 async function _createWebGPUWater(sun, PLANE_SIZE, SEGMENTS, IS_MOBILE) {
   const { Fn, float, vec2, vec3, cos, sin, normalize, positionLocal, time } = TSL;

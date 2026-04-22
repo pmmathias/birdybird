@@ -596,6 +596,10 @@
         label.textContent = 'iFFT' + rendererSuffix;
         dot.classList.remove('fallback');
         document.getElementById('water-mode').title = 'Waves: FFT-based (Ocean3) · Renderer: ' + (renderer || 'WebGL2');
+      } else if (path === 'iFFT (WebGPU)') {
+        label.textContent = 'iFFT · WebGPU';
+        dot.classList.remove('fallback');
+        document.getElementById('water-mode').title = 'Waves: WGSL compute iFFT (Ocean4) on WebGPURenderer';
       } else if (path === 'Gerstner') {
         label.textContent = 'Gerstner' + rendererSuffix;
         dot.classList.add('fallback');
@@ -603,7 +607,7 @@
       } else if (path === 'Gerstner (WebGPU)') {
         label.textContent = 'Gerstner · WebGPU';
         dot.classList.add('fallback');
-        document.getElementById('water-mode').title = 'Waves: TSL Gerstner on WebGPURenderer';
+        document.getElementById('water-mode').title = 'Waves: TSL Gerstner (Ocean4 unavailable) on WebGPURenderer';
       } else {
         label.textContent = '…';
       }
