@@ -121,9 +121,14 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   }
 
   const material = new MeshBasicNodeMaterial();
-  // Raw displacement — Phil uses 1:1, values are in world meters already.
+  // Raw displacement values are in world meters. We DAMPEN the vertical
+  // component (Y) heavily — Phil's permutation shader pre-multiplies Y by 2.25
+  // for dramatic ocean look, but for a bird-simulator the resulting ±3-5m
+  // swell makes the sea surface appear to rise/fall unrealistically. Keep
+  // full horizontal choppiness (X, Z) so wave faces still skew realistically.
   const dispSample = texture(waves.dispMapTexture, uv());
-  material.positionNode = positionLocal.add(dispSample.xyz);
+  const dampedDisp = vec3(dispSample.x, dispSample.y.mul(0.35), dispSample.z);
+  material.positionNode = positionLocal.add(dampedDisp);
   // Phil's Ocean4 stores WORLD-space normals packed (x, z, y) in RGB, 0..1
   // range. We sample directly in the color shader (see below) — setting
   // material.normalNode via normalMap() gave a near-flat result because
@@ -141,6 +146,9 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
 
   const mirrorSampler = reflector();
   mirrorSampler.reflector.resolutionScale = IS_MOBILE ? 0.4 : 0.6;
+
+  const { smoothstep } = TSL;
+  const uFoamColor = uniform(new THREE.Color(0xf4f8ff));
 
   material.colorNode = Fn(() => {
     const wp = positionWorld;
@@ -176,8 +184,14 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
     const rf0 = float(0.04);
     const reflectance = pow(float(1.0).sub(theta), 5.0).mul(float(1.0).sub(rf0)).add(rf0);
 
+    // Whitecap foam on steep wave faces — where normal.y drops below ~0.85,
+    // the surface is tilted enough that a real breaking crest would be there.
+    // Cheap "Gischt" effect without needing the scene depth buffer.
+    const foamFactor = smoothstep(float(0.88), float(0.65), N.y);
+    const lit_with_foam = mix(lit, uFoamColor, foamFactor);
+
     const reflected = mirrorSampler.rgb.add(glint);
-    return mix(lit.add(glint.mul(0.3)), reflected, reflectance);
+    return mix(lit_with_foam.add(glint.mul(0.3)), reflected, reflectance);
   })();
 
   const mesh = new THREE.Mesh(geometry, material);
@@ -190,8 +204,15 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   const waterGroup = new THREE.Group();
   waterGroup.add(mesh);
 
-  function update(/* dt */) {
-    waves.update();
+  // FPS win: with default back-face culling the water plane is invisible
+  // when viewed from below anyway. Hiding the mesh when the bird is under
+  // water skips (a) the 2.36M-vertex shader and (b) the reflector render
+  // pass. Ocean4 compute also paused — player won't notice waves freezing
+  // while submerged.
+  function update(_dt, birdAltitude) {
+    const submerged = birdAltitude !== undefined && birdAltitude < WATER_LEVEL;
+    mesh.visible = !submerged;
+    if (!submerged) waves.update();
   }
   return { mesh: waterGroup, update };
 }
@@ -251,8 +272,9 @@ async function _createWebGPUWater(sun, PLANE_SIZE, SEGMENTS, IS_MOBILE) {
   waterGroup.add(water);
   // Note: underwater plane skipped on WebGPU for V1 (T019 follow-up)
 
-  function update(/* dt */) {
-    // TSL `time` uniform auto-advances; nothing to do
+  function update(_dt, birdAltitude) {
+    // TSL `time` uniform auto-advances; just toggle visibility.
+    water.visible = birdAltitude === undefined || birdAltitude >= WATER_LEVEL;
   }
   return { mesh: waterGroup, update };
 }
@@ -311,10 +333,18 @@ async function _createIFFTWater(sun, renderer, PLANE_SIZE, SEGMENTS, REFLECTION_
   waterGroup.add(water);
   waterGroup.add(underWater);
 
-  function update(dt) {
-    ocean.update(dt);
-    water.material.uniforms.time.value += dt;
-    underWater.material.uniforms.time.value += dt;
+  function update(dt, birdAltitude) {
+    const submerged = birdAltitude !== undefined && birdAltitude < WATER_LEVEL;
+    // Skip the ocean iFFT compute + reflector pass while underwater, and
+    // likewise skip the underwater mirror plane while above water.
+    water.visible = !submerged;
+    underWater.visible = submerged;
+    if (!submerged) {
+      ocean.update(dt);
+      water.material.uniforms.time.value += dt;
+    } else {
+      underWater.material.uniforms.time.value += dt;
+    }
   }
   return { mesh: waterGroup, update };
 }
@@ -382,10 +412,16 @@ async function _createGerstnerWater(sun, PLANE_SIZE, SEGMENTS, REFLECTION_SIZE) 
   waterGroup.add(water);
   waterGroup.add(underWater);
 
-  function update(dt) {
-    water.material.uniforms.time.value += dt;
-    water.material.uniforms.waveTime.value += dt;
-    underWater.material.uniforms.time.value += dt;
+  function update(dt, birdAltitude) {
+    const submerged = birdAltitude !== undefined && birdAltitude < WATER_LEVEL;
+    water.visible = !submerged;
+    underWater.visible = submerged;
+    if (!submerged) {
+      water.material.uniforms.time.value += dt;
+      water.material.uniforms.waveTime.value += dt;
+    } else {
+      underWater.material.uniforms.time.value += dt;
+    }
   }
   return { mesh: waterGroup, update };
 }

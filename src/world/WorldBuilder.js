@@ -282,7 +282,7 @@ export async function buildWorld(scene, renderer) {
   let elapsed = 0;
   function update(dt, camera, birdAltitude) {
     elapsed += dt;
-    water.update(dt);
+    water.update(dt, birdAltitude);
     clouds.update(dt);
     frustumCuller.update(camera);
     if (underwater) underwater.update(dt, birdAltitude);
