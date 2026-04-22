@@ -70,7 +70,9 @@ async function test(urlParam, label) {
   console.log('DIAG:', JSON.stringify(diag));
   await page.screenshot({ path: `/tmp/smoke-${label}.png` });
 
-  // Second screenshot: teleport camera near a tree to verify forest rendering
+  // Second screenshot: find the LOWEST bark instance (likely a trunk near its
+  // base) and position the camera at ground-level a few meters away to get
+  // a clean trunk profile for root-flare comparison.
   const spot = await page.evaluate(() => {
     const s = window.__scene;
     const r = window.__renderer;
@@ -78,16 +80,26 @@ async function test(urlParam, label) {
     if (window.__cameraRig) window.__cameraRig.update = () => {};
     const rr = s?.getObjectByName?.('rr-forest');
     let found = null;
+    let minY = Infinity;
     if (rr) rr.traverse((o) => {
-      if (found || !o.isInstancedMesh || o.count === 0) return;
+      if (!o.isInstancedMesh || o.count === 0) return;
+      if (!o.geometry?.type?.includes('Cylinder')) return;
       const m = o.instanceMatrix.array;
-      found = { x: m[12], y: m[13], z: m[14] };
+      // Find the instance with lowest Y (trunk base area)
+      for (let i = 0; i < Math.min(o.count, 500); i++) {
+        const y = m[i * 16 + 13];
+        if (y < minY) {
+          minY = y;
+          found = { x: m[i * 16 + 12], y, z: m[i * 16 + 14] };
+        }
+      }
     });
     if (!found) return null;
-    cam.position.set(found.x + 30, found.y + 20, found.z + 30);
-    cam.lookAt(found.x, found.y + 8, found.z);
-    cam.fov = 55;
-    cam.near = 0.5;
+    // Stand a few meters away, camera at the trunk's level, looking at trunk
+    cam.position.set(found.x + 3, found.y + 0.5, found.z + 3);
+    cam.lookAt(found.x, found.y, found.z);
+    cam.fov = 50;
+    cam.near = 0.1;
     cam.updateProjectionMatrix();
     r.render(s, cam);
     return found;
