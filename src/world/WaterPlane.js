@@ -108,10 +108,9 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
     Res: IS_MOBILE ? 256 : 512,
     Siz: WAVE_TILE,
     // Phillips-Spektrum: dominante Wellenlänge ≈ 2π·WSp²/g.
-    // WSp 20 → ~256m (Dünung / Monsterwellen-Optik).
-    // WSp 12 → ~92m, plus Chp 2.5 für knackigere Kämme = kurze Ostsee-Wellen.
-    WSp: 12, WHd: 295, Chp: 2.5,
-    Spd: 1.2,
+    // WSp 9 → ~52m peak λ, hohe Frequenz, kurze wind-chop waves.
+    WSp: 9, WHd: 295, Chp: 2.8,
+    Spd: 1.3,
   });
 
   const geometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, SEGMENTS, SEGMENTS);
@@ -147,10 +146,6 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   const mirrorSampler = reflector();
   mirrorSampler.reflector.resolutionScale = IS_MOBILE ? 0.4 : 0.6;
 
-  const { smoothstep, abs } = TSL;
-  const uFoamColor = uniform(new THREE.Color(0xf4f8ff));
-  const uWaterLevel = uniform(WATER_LEVEL);
-
   material.colorNode = Fn(() => {
     const wp = positionWorld;
     const V = normalize(cameraPosition.sub(wp));
@@ -185,21 +180,8 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
     const rf0 = float(0.04);
     const reflectance = pow(float(1.0).sub(theta), 5.0).mul(float(1.0).sub(rf0)).add(rf0);
 
-    // Whitecap foam — two signals combined:
-    //   a) WAVE HEIGHT (positionWorld.y is interpolated per-vertex from the
-    //      displaced geometry, so mipmap filtering on the normal map can't
-    //      wash it out like it does slopeFoam at flight altitude). Only
-    //      positive side = crests get foam, troughs stay dark.
-    //   b) SLOPE: steep faces where N.y drops below ~0.85 — gets foam on
-    //      breaking wave flanks up close where the normal map is still sharp.
-    const waveH = wp.y.sub(uWaterLevel);
-    const heightFoam = smoothstep(float(0.55), float(1.1), waveH);
-    const slopeFoam  = smoothstep(float(0.90), float(0.70), N.y);
-    const foamFactor = max(heightFoam, slopeFoam).mul(0.85);
-    const lit_with_foam = mix(lit, uFoamColor, foamFactor);
-
     const reflected = mirrorSampler.rgb.add(glint);
-    return mix(lit_with_foam.add(glint.mul(0.3)), reflected, reflectance);
+    return mix(lit.add(glint.mul(0.3)), reflected, reflectance);
   })();
 
   const mesh = new THREE.Mesh(geometry, material);

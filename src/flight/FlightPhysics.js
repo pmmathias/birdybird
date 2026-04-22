@@ -172,10 +172,13 @@ export class FlightPhysics {
 
     // --- 5b. Lateral coherence — damp horizontal sideways velocity ---
     // Without this, after a quick yaw turn s.forward snaps to the new heading
-    // but s.velocity.xz keeps its old direction (only gradually redirected by
-    // thrust). The bird visibly crabs sideways. Real wings catch a lot of
-    // lateral air so we model that as a damping of the XZ velocity component
-    // perpendicular to forward. Y (climb/dive) is untouched.
+    // but s.velocity.xz keeps its old direction. Two corrections:
+    //   a) Lateral drag: damps the XZ component perpendicular to forward
+    //      (real wings catch sideways air).
+    //   b) Reverse brake: if fwdDot < 0, velocity points OPPOSITE to forward
+    //      (can happen after a U-turn). Birds can't fly backwards — brake
+    //      that component aggressively so flap thrust can re-establish
+    //      forward motion in the new direction.
     if (speed > 2 && s.wingSpread > 0.5) {
       const vxz_x = s.velocity.x;
       const vxz_z = s.velocity.z;
@@ -186,11 +189,19 @@ export class FlightPhysics {
         const fxnx = fxz_x / fxzLen;
         const fxnz = fxz_z / fxzLen;
         const fwdDot = vxz_x * fxnx + vxz_z * fxnz;
+        // a) lateral
         const latX = vxz_x - fxnx * fwdDot;
         const latZ = vxz_z - fxnz * fwdDot;
-        const LATERAL_DRAG_RATE = 2.0; // s^-1 — ~half-life 0.35s
+        const LATERAL_DRAG_RATE = 2.0; // s^-1
         s.velocity.x -= latX * LATERAL_DRAG_RATE * dt;
         s.velocity.z -= latZ * LATERAL_DRAG_RATE * dt;
+        // b) reverse brake — only when flying "backwards"
+        if (fwdDot < 0) {
+          const REVERSE_BRAKE_RATE = 4.0; // s^-1 — kills reverse in ~0.25s
+          // fwdDot < 0, so subtracting `fxn * fwdDot * rate * dt` pushes +fwd
+          s.velocity.x -= fxnx * fwdDot * REVERSE_BRAKE_RATE * dt;
+          s.velocity.z -= fxnz * fwdDot * REVERSE_BRAKE_RATE * dt;
+        }
       }
     }
 
