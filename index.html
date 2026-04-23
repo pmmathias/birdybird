@@ -472,6 +472,9 @@
       <button id="credits-btn" class="tb-item" title="Credits">
         <span>Credits</span>
       </button>
+      <button id="options-btn" class="tb-item" title="Options">
+        <span>Options</span>
+      </button>
     </div>
     <div id="topbar-right">
       <div id="water-mode" class="tb-item tb-hide-mobile" title="Water rendering mode">
@@ -547,6 +550,82 @@
     </div>
   </div>
 
+  <!-- Options overlay -->
+  <style>
+    #options-overlay {
+      position: fixed; inset: 0; z-index: 2000;
+      background: rgba(10, 22, 40, 0.88);
+      display: none; align-items: center; justify-content: center;
+      backdrop-filter: blur(8px);
+    }
+    #options-overlay.open { display: flex; }
+    #options-card {
+      background: #0f1a2f; color: #dce4f2;
+      border: 1px solid rgba(100, 140, 200, 0.25);
+      border-radius: 12px;
+      max-width: 520px; width: 92%; max-height: 85vh; overflow-y: auto;
+      padding: 28px 30px; position: relative;
+      font-family: -apple-system, sans-serif;
+    }
+    #options-card h2 { margin: 0 0 16px; font-size: 20px; color: #60c0ff; }
+    #options-card h3 { margin: 18px 0 6px; font-size: 13px; color: #88aacc; letter-spacing: 0.5px; text-transform: uppercase; }
+    #options-close {
+      position: absolute; top: 12px; right: 16px;
+      background: none; border: none; color: #88aacc;
+      font-size: 28px; line-height: 1; cursor: pointer;
+    }
+    .opt-group { margin-bottom: 18px; }
+    .opt-group label {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 12px; margin: 6px 0;
+      background: rgba(255,255,255,0.03); border-radius: 8px;
+      cursor: pointer; transition: background 0.15s;
+      font-size: 14px;
+    }
+    .opt-group label:hover { background: rgba(255,255,255,0.07); }
+    .opt-group label input { margin-top: 3px; accent-color: #60c0ff; }
+    .opt-group label.disabled {
+      opacity: 0.45; cursor: not-allowed;
+    }
+    .opt-group label.disabled:hover { background: rgba(255,255,255,0.03); }
+    .opt-desc {
+      display: block; font-size: 12px; color: #88aacc; margin-top: 2px;
+    }
+    .opt-unavail {
+      color: #e88866; font-size: 11px; margin-left: 6px; font-style: italic;
+    }
+    #options-apply-note {
+      margin-top: 16px; padding: 10px 14px;
+      background: rgba(96,192,255,0.08);
+      border-left: 3px solid #60c0ff;
+      border-radius: 4px;
+      font-size: 12px; color: #b0c4de;
+    }
+  </style>
+  <div id="options-overlay">
+    <div id="options-card">
+      <button id="options-close">&times;</button>
+      <h2>⚙️ Render Options</h2>
+
+      <div class="opt-group" data-option="renderer">
+        <h3>Renderer</h3>
+        <label><input type="radio" name="renderer" value="auto" checked><span><b>Auto (recommended)</b><span class="opt-desc">Uses WebGPU where available, WebGL2 otherwise.</span></span></label>
+        <label data-requires="webgpu"><input type="radio" name="renderer" value="webgpu"><span><b>Force WebGPU</b><span class="opt-desc">Modern compute-shader pipeline. Required for iFFT ×3 cascaded ocean.</span></span></label>
+        <label><input type="radio" name="renderer" value="webgl"><span><b>Force WebGL2</b><span class="opt-desc">Legacy path — most compatible but skips the TSL visual upgrades.</span></span></label>
+      </div>
+
+      <div class="opt-group" data-option="ocean">
+        <h3>Ocean Quality</h3>
+        <label><input type="radio" name="ocean" value="default" checked><span><b>Single Cascade (default)</b><span class="opt-desc">Phil Crowther's Ocean4 iFFT — fast, stable ~120 fps on desktop WebGPU.</span></span></label>
+        <label data-requires="webgpu"><input type="radio" name="ocean" value="cascaded"><span><b>iFFT ×3 Cascaded (Attila-inspired)</b><span class="opt-desc">Three FFT spectra layered for richer multi-scale waves. Costs ~60% FPS.</span></span></label>
+      </div>
+
+      <div id="options-apply-note">
+        Changing an option reloads the page with the new setting active.
+      </div>
+    </div>
+  </div>
+
   <!-- Install-as-App hint (iOS Safari only, non-standalone) -->
   <div id="install-hint">
     <span>Share &rarr; Zum Home-Bildschirm &rarr; Vollbild</span>
@@ -593,6 +672,62 @@
     document.getElementById('credits-btn').addEventListener('click', () => ov.classList.add('open'));
     document.getElementById('credits-close').addEventListener('click', () => ov.classList.remove('open'));
     ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('open'); });
+
+    // Options overlay — hardware-aware render settings
+    (function setupOptions() {
+      const oov = document.getElementById('options-overlay');
+      document.getElementById('options-btn').addEventListener('click', () => oov.classList.add('open'));
+      document.getElementById('options-close').addEventListener('click', () => oov.classList.remove('open'));
+      oov.addEventListener('click', (e) => { if (e.target === oov) oov.classList.remove('open'); });
+
+      // Detect what's actually available on this browser/hardware
+      const hasWebGPU = !!navigator.gpu;
+
+      // Disable options that require WebGPU if the browser can't provide it
+      oov.querySelectorAll('label[data-requires="webgpu"]').forEach((lbl) => {
+        if (!hasWebGPU) {
+          lbl.classList.add('disabled');
+          const input = lbl.querySelector('input');
+          if (input) input.disabled = true;
+          const unavail = document.createElement('span');
+          unavail.className = 'opt-unavail';
+          unavail.textContent = '— not supported by this browser';
+          lbl.querySelector('span').appendChild(unavail);
+        }
+      });
+
+      // Reflect current URL params as the selected radios
+      const params = new URLSearchParams(location.search);
+      const rendererParam = params.get('renderer');  // 'webgpu' | 'webgl' | null
+      const oceanParam    = params.get('ocean');     // 'cascaded' | null
+      const rendererVal = rendererParam === 'webgpu' ? 'webgpu'
+                       : rendererParam === 'webgl'  ? 'webgl'
+                       : 'auto';
+      const oceanVal    = oceanParam === 'cascaded' ? 'cascaded' : 'default';
+      const rRadio = oov.querySelector(`input[name="renderer"][value="${rendererVal}"]`);
+      const oRadio = oov.querySelector(`input[name="ocean"][value="${oceanVal}"]`);
+      if (rRadio) rRadio.checked = true;
+      if (oRadio) oRadio.checked = true;
+
+      // Apply: rebuild URL with new params and reload
+      function applyOptionChange() {
+        const r = oov.querySelector('input[name="renderer"]:checked')?.value || 'auto';
+        const o = oov.querySelector('input[name="ocean"]:checked')?.value    || 'default';
+        const newParams = new URLSearchParams(location.search);
+        // Renderer
+        if (r === 'auto') newParams.delete('renderer');
+        else              newParams.set('renderer', r);
+        // Ocean
+        if (o === 'default') newParams.delete('ocean');
+        else                 newParams.set('ocean', o);
+        // Preserve skipcalib and other existing params naturally
+        const queryString = newParams.toString();
+        location.search = queryString ? '?' + queryString : '';
+      }
+      oov.querySelectorAll('input[type="radio"]').forEach((inp) => {
+        inp.addEventListener('change', applyOptionChange);
+      });
+    })();
 
     // Water + renderer indicators — updated via window.__waterPath / __rendererPath
     function refreshWaterMode() {
