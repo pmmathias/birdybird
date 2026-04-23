@@ -120,20 +120,40 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   // where the ocean isn't always the focus).
   const urlParams = new URLSearchParams(location.search);
   const CASCADES_ENABLED = !IS_MOBILE && urlParams.get('ocean') === 'cascaded';
+  // Cascaded-mode inspired by Attila's WebGPU-IFFT-Ocean LENGTH_SCALES
+  // [250, 17, 5]. His version cascades at GEOMETRY level (quadtree chunks
+  // with varying vertex density per cascade). We have a flat uniform plane
+  // (6.25m/vertex), so cascades below that spacing can't contribute to
+  // geometry — they'd be below Nyquist and produce artifacts. Instead:
+  //
+  //   - Cascade A (250m tile): displacement + normal. Dominant swell/chop.
+  //   - Cascade B (80m tile):  displacement + normal. Mid-freq wind-chop.
+  //   - Cascade C (20m tile):  NORMAL MAP ONLY. Fine ripple sparkle for
+  //     reflection distortion + specular, no geometric contribution.
+  //
+  // When cascaded mode is OFF we use the old single-cascade 2400m setup.
+  // Cascaded mode uses a larger MAIN tile than Attila's 250m so we keep the
+  // dominant swell that reads from bird altitude — but adds two higher-freq
+  // cascades for the multi-scale detail that made his demo look alive. Higher
+  // wind speeds per cascade give each scale enough amplitude to be visible.
+  const mainSiz  = CASCADES_ENABLED ? 1200 : WAVE_TILE;
   const cascadeA = new Ocean4(renderer, {
     Res: IS_MOBILE ? 256 : 512,
-    Siz: WAVE_TILE,                              // 2400m — dominant swell & medium waves
-    WSp: 9, WHd: 295, Chp: 2.8, Spd: 1.3,
+    Siz: mainSiz,
+    WSp: CASCADES_ENABLED ? 11 : 9,
+    WHd: 295,
+    Chp: CASCADES_ENABLED ? 1.4 : 2.8,
+    Spd: 1.3,
   });
   const cascadeB = CASCADES_ENABLED ? new Ocean4(renderer, {
     Res: 256,
-    Siz: 400,                                    // 400m — wind chop, short wavelengths
-    WSp: 6, WHd: 280, Chp: 2.2, Spd: 1.6,
+    Siz: 150,                                    // mid-freq chop (~80-130m wavelengths)
+    WSp: 6.0, WHd: 240, Chp: 1.2, Spd: 1.6,
   }) : null;
   const cascadeC = CASCADES_ENABLED ? new Ocean4(renderer, {
     Res: 256,
-    Siz: 80,                                     // 80m — tiny ripples/sparkle
-    WSp: 3.5, WHd: 310, Chp: 1.8, Spd: 2.2,
+    Siz: 30,                                     // fine sparkle (normal-only)
+    WSp: 2.5, WHd: 310, Chp: 1.0, Spd: 2.2,
   }) : null;
 
   const geometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, SEGMENTS, SEGMENTS);
@@ -143,22 +163,21 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   }
 
   const material = new MeshBasicNodeMaterial();
-  // Sample each cascade at a UV scaled to its tile size. Main cascade uses the
-  // existing vertex UVs; B and C repeat more frequently across the plane to
-  // get their higher-frequency content into the vertex geometry.
-  const uvScaleB = WAVE_TILE / 400;   // 6× — cascade B repeats 6× per main tile
-  const uvScaleC = WAVE_TILE / 80;    // 30× — cascade C repeats 30× per main tile
-  const dispA = texture(cascadeA.dispMapTexture, uv());
+  // UV scales — WAVE_TILE is the base UV repeat unit (2400m). Each cascade's
+  // UV gets scaled so the tile texture maps exactly to `Siz` meters of world.
+  const uvScaleA = WAVE_TILE / mainSiz;  // 1× in single-cascade mode, 2× when cascaded (1200m)
+  const uvScaleB = WAVE_TILE / 150;      // 16×
+  const uvScaleC = WAVE_TILE / 30;       // 80×
+  const dispA = texture(cascadeA.dispMapTexture, uv().mul(uvScaleA));
   const dispB = CASCADES_ENABLED ? texture(cascadeB.dispMapTexture, uv().mul(uvScaleB)) : null;
-  const dispC = CASCADES_ENABLED ? texture(cascadeC.dispMapTexture, uv().mul(uvScaleC)) : null;
+  // Cascade C (20m tile) is intentionally NOT in the displacement sum — at
+  // our 6.25m vertex spacing it's right at Nyquist and would cause aliasing.
+  // C contributes only to the fragment-level normal for sparkle.
 
-  // Weighted sum: main cascade at full weight, B at 0.5, C at 0.25 (tiny
-  // ripples contribute to surface texture but shouldn't dominate). Y is still
-  // damped to 0.35 overall to avoid the sea-sick vertical swell.
+  // Weighted sum of geometry-contributing cascades. Y damped to 0.35 to
+  // avoid a sea-sick vertical swell.
   let sumDisp = dispA.xyz;
-  if (CASCADES_ENABLED) {
-    sumDisp = sumDisp.add(dispB.xyz.mul(0.5)).add(dispC.xyz.mul(0.25));
-  }
+  if (CASCADES_ENABLED) sumDisp = sumDisp.add(dispB.xyz.mul(0.5));
   const dampedDisp = vec3(sumDisp.x, sumDisp.y.mul(0.35), sumDisp.z);
   material.positionNode = positionLocal.add(dampedDisp);
 
@@ -184,7 +203,7 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
     // Adding decoded normals and re-normalizing is an approximation — not
     // physically correct, but looks good in practice and way cheaper than
     // re-computing normals from the summed displacement via derivatives.
-    const nA = texture(cascadeA.normMapTexture, uv()).xyz.mul(2.0).sub(1.0);
+    const nA = texture(cascadeA.normMapTexture, uv().mul(uvScaleA)).xyz.mul(2.0).sub(1.0);
     let nSum = vec3(nA.x, nA.z, nA.y);
     if (CASCADES_ENABLED) {
       const nB = texture(cascadeB.normMapTexture, uv().mul(uvScaleB)).xyz.mul(2.0).sub(1.0);
