@@ -31,16 +31,24 @@ export class BirdModel {
       // Scale up for visibility from chase camera
       this._model.scale.setScalar(0.04); // Stork model is large, scale to world units
 
-      // Fix materials for mobile compatibility (no env map needed)
+      // Fix materials for mobile compatibility (no env map needed) and
+      // switch from flat → Gouraud (smooth) shading: the Stork.glb ships
+      // with faceted normals or flatShading=true depending on exporter,
+      // making the bird look low-poly in close-up chase views. Setting
+      // flatShading=false + recomputing per-vertex normals from the
+      // topology gives the smooth, rounded feathers we want.
       this._model.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = false;
           child.receiveShadow = false;
+          if (child.geometry) {
+            child.geometry.computeVertexNormals();
+          }
           if (child.material) {
-            // Keep original material but disable env-map dependency
             child.material.envMap = null;
             if (child.material.metalness !== undefined) child.material.metalness = 0;
             if (child.material.roughness !== undefined) child.material.roughness = 0.8;
+            child.material.flatShading = false;
             child.material.needsUpdate = true;
           }
         }

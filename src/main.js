@@ -85,14 +85,20 @@ if (urlParams.has('y')) flightState.position.y = parseFloat(urlParams.get('y'));
 if (urlParams.has('z')) flightState.position.z = parseFloat(urlParams.get('z'));
 if (urlParams.has('yaw')) flightState.yaw = parseFloat(urlParams.get('yaw'));
 if (urlParams.has('pitch')) flightState.pitch = parseFloat(urlParams.get('pitch'));
-if (urlParams.has('speed')) {
-  const s = parseFloat(urlParams.get('speed'));
-  flightState.velocity.set(
-    -Math.sin(flightState.yaw) * s,
-    0,
-    -Math.cos(flightState.yaw) * s,
-  );
-}
+// Initial forward velocity. Without this the bird spawns at altitude with
+// velocity=0 → immediately stalls → falls → transitions to LANDING →
+// GROUNDED before the player figures out the flap gesture. Phil reported
+// exactly this on his iPhone test: "bird standing vertically, could only
+// spin". A gliding-speed starting velocity gives the player ~10-15s of
+// airtime to learn the controls.
+const defaultSpawnSpeed = urlParams.has('speed')
+  ? parseFloat(urlParams.get('speed'))
+  : 18; // m/s ≈ 65 km/h — gentle glide
+flightState.velocity.set(
+  -Math.sin(flightState.yaw) * defaultSpawnSpeed,
+  0,
+  -Math.cos(flightState.yaw) * defaultSpawnSpeed,
+);
 if (urlParams.has('mode')) flightState.mode = parseInt(urlParams.get('mode'));
 flightState.altitude = flightState.position.y;
 const flightPhysics = new FlightPhysics(flightState);
