@@ -52,20 +52,37 @@ export class MobileInput {
   }
 
   async requestPermission() {
-    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      try {
-        const response = await DeviceOrientationEvent.requestPermission();
-        if (response === 'granted') {
-          this._startListening();
-          return true;
-        }
-      } catch (e) {
-        console.warn('DeviceOrientation permission denied:', e);
-      }
+    const needsOrientationPerm = typeof DeviceOrientationEvent.requestPermission === 'function';
+    const needsMotionPerm = typeof window.DeviceMotionEvent?.requestPermission === 'function';
+
+    if (!needsOrientationPerm && !needsMotionPerm) {
+      this._startListening();
+      return true;
+    }
+
+    try {
+      // iOS 13+ requires SEPARATE permissions for orientation and motion.
+      // We need both: orientation for tilt-fly controls, motion for the
+      // shake-to-flap gesture (which also drives the shake calibration
+      // step). Asking only for orientation silently leaves devicemotion
+      // events unfired → the calibration wizard would hang indefinitely
+      // on the shake step. Request both in parallel.
+      const responses = await Promise.all([
+        needsOrientationPerm
+          ? DeviceOrientationEvent.requestPermission().catch(() => 'denied')
+          : Promise.resolve('granted'),
+        needsMotionPerm
+          ? DeviceMotionEvent.requestPermission().catch(() => 'denied')
+          : Promise.resolve('granted'),
+      ]);
+      const orientationOk = responses[0] === 'granted';
+      const motionOk = responses[1] === 'granted';
+      if (orientationOk) this._startListening();
+      return orientationOk && motionOk;
+    } catch (e) {
+      console.warn('Sensor permission request failed:', e);
       return false;
     }
-    this._startListening();
-    return true;
   }
 
   _startListening() {

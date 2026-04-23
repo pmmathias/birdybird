@@ -158,14 +158,39 @@ export class CalibrationWizard {
       bar.style.animation = 'none'; // pulsing handled via opacity
     }
 
+    // Add a tap-to-skip button so users on devices where devicemotion
+    // never fires (iOS without DeviceMotionEvent permission, simulators,
+    // desktop browsers that forwarded mobile UA) aren't stuck forever
+    // at "Flugelschlag!". 8s hard timeout as extra safety net.
+    const skipBtn = document.createElement('button');
+    skipBtn.textContent = t('calib.skipShake') || 'Skip';
+    skipBtn.style.cssText = `
+      margin-top:28px; padding:10px 22px; font-size:14px;
+      background:rgba(255,255,255,0.08); color:#88aacc;
+      border:1px solid rgba(255,255,255,0.15); border-radius:8px;
+      cursor:pointer;
+    `;
+    this._overlay.appendChild(skipBtn);
+
     return new Promise((resolve) => {
       let lastAccel = { x: 0, y: 0, z: 0 };
-      let detected = false;
+      let motionSeen = false;
+      let settled = false;
+
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener('devicemotion', handler, true);
+        clearTimeout(timeoutId);
+        skipBtn.remove();
+        resolve(result);
+      };
 
       const handler = (e) => {
-        if (detected) return;
+        if (settled) return;
         const a = e.accelerationIncludingGravity;
         if (!a) return;
+        motionSeen = true;
 
         const dx = a.x - lastAccel.x;
         const dy = a.y - lastAccel.y;
@@ -174,21 +199,28 @@ export class CalibrationWizard {
         lastAccel = { x: a.x, y: a.y, z: a.z };
 
         if (mag > 10) {
-          detected = true;
-          window.removeEventListener('devicemotion', handler, true);
           // Flash success
           const h2 = this._overlay.querySelector('h2');
           if (h2) {
             h2.textContent = `${t('calib.detected')} ✓`;
             h2.style.color = '#44dd88';
           }
-          setTimeout(
-            () => resolve({ threshold: clamp(mag * 0.6, 8, 18) }),
-            600,
-          );
+          setTimeout(() => finish({ threshold: clamp(mag * 0.6, 8, 18) }), 600);
         }
       };
       window.addEventListener('devicemotion', handler, true);
+
+      skipBtn.addEventListener('click', () => finish({ threshold: 12 }));
+
+      // 8s hard timeout: if we never saw ANY motion event, the permission
+      // likely wasn't granted or this device doesn't fire them. Log and
+      // fall through with a default threshold instead of hanging.
+      const timeoutId = setTimeout(() => {
+        if (!motionSeen) {
+          console.warn('CalibrationWizard: no devicemotion events in 8s, using default shake threshold');
+        }
+        finish({ threshold: 12 });
+      }, 8000);
     });
   }
 
