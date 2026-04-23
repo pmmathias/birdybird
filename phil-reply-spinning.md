@@ -33,8 +33,16 @@ keyboard"). If your shakes ARE being detected it should be gone. If it
 stays visible on retry, that would point to the motion-permission grant
 not actually sticking on your iOS version, which would be worth knowing.
 
-Could you try one more time? Same URL. Should see a clear glide, and
-if you can shake the phone, proper powered flight.
+Could you try one more time? I also added a `?seed=N` URL param so
+you and I end up on the same procedural world — before this every
+browser got its own random terrain and I couldn't tell whether some
+obstacle near your spawn was aggravating things. Here's a known-good
+seed I've test-flown:
+
+https://pmmathias.github.io/birdybird/?seed=42
+
+Should see a clear glide, and if you can shake the phone, proper
+powered flight.
 
 Cheers,
 Mathias
