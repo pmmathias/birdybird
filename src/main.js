@@ -61,7 +61,27 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.1;
 
 // --- Build the world ---
+// ?seed=N makes the world deterministic (same terrain + tree/house placement
+// for everyone using that seed). Useful for debugging ("look at ?seed=42 and
+// tell me what you see") and for sharing a specific scenic spot. Without the
+// param, worlds are random per browser and cached in localStorage.
+const seedParam = new URLSearchParams(location.search).get('seed');
+let restoreRandom = null;
+if (seedParam !== null) {
+  const seed = parseInt(seedParam, 10);
+  if (Number.isFinite(seed)) {
+    const { installSeededRandom } = await import('./utils/seeded-random.js');
+    restoreRandom = installSeededRandom(seed);
+    // Bypass the world cache so the seeded world is actually regenerated —
+    // otherwise a previously-cached random world would shadow the seeded one.
+    localStorage.removeItem('world_arcs');
+    localStorage.removeItem('world_heightmap');
+    localStorage.removeItem('world_version');
+    console.log(`World seed: ${seed} (deterministic)`);
+  }
+}
 const world = await buildWorld(scene, renderer);
+if (restoreRandom) restoreRandom();
 
 // --- Flight system ---
 const flightState = new FlightState();
