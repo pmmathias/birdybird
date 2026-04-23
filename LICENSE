@@ -1,0 +1,67 @@
+MIT License
+
+Copyright (c) 2026 Mathias Leonhardt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+Third-party notices
+================================================================================
+
+This repository bundles third-party code under separate licenses. You are
+responsible for complying with those licenses when you redistribute or
+deploy birdybird.
+
+1. Ocean3.js / Ocean4.js — CC BY-NC-SA 3.0 (non-commercial)
+   Files: src/vendor/Ocean3.js, src/vendor/Ocean4.js
+   Authors: Phil Crowther, Attila Schroeder (WebGPU port). Based on earlier
+   work by David Li, Aleksandr Albert, and Jérémy Bouny.
+   License: Creative Commons Attribution-NonCommercial-ShareAlike 3.0
+   Unported — https://creativecommons.org/licenses/by-nc-sa/3.0/
+
+   Because these files are active by default in the rendered water surface,
+   deployments of birdybird that keep them compiled in inherit the NC
+   ("NonCommercial") restriction: you may not use the deployed work for
+   commercial purposes without replacing the Ocean* modules with the
+   included Gerstner-wave fallback (see `src/world/WaterPlane.js`
+   `_createGerstnerWater` / `_createWebGPUWater`), which is MIT-licensed
+   along with the rest of this repo.
+
+2. RedReddingtonForest.js / RedReddingtonForestNode.js — MIT
+   Files: src/vendor/RedReddingtonForest.js, src/vendor/RedReddingtonForestNode.js
+   Author: red-reddington (https://codepen.io/the-red-reddington)
+   Ported and adapted with permission. MIT-compatible with the rest of
+   this repo.
+
+3. Stork 3D model — community asset
+   File: public/models/Stork.glb
+   Provenance: free community glTF asset; treat as CC0-equivalent for
+   this project. Replace with your own asset if stricter provenance is
+   required.
+
+4. Terrain and building textures — CC0
+   Source: Poly Haven (https://polyhaven.com)
+
+5. Three.js — MIT (https://github.com/mrdoob/three.js)
+   lil-gui — MIT (https://github.com/georgealways/lil-gui)
+   MediaPipe Tasks Vision — Apache 2.0
+     (https://github.com/google/mediapipe)
+
+Attribution for all of the above is carried in the live Credits overlay
+(click "Credits" in the top bar) at runtime.
