@@ -43,8 +43,9 @@ export async function createWaterPlane(sun, renderer) {
     // Try iFFT first; Gerstner is only the fallback.
     try {
       const water = _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE);
-      window.__waterPath = 'iFFT (WebGPU)';
-      console.log('Water: WebGPU → Ocean4 iFFT compute');
+      const cascaded = new URLSearchParams(location.search).get('ocean') === 'cascaded';
+      window.__waterPath = cascaded ? 'iFFT ×3 (WebGPU)' : 'iFFT (WebGPU)';
+      console.log(`Water: WebGPU → Ocean4 iFFT compute${cascaded ? ' [cascaded, Attila-inspired]' : ''}`);
       return water;
     } catch (err) {
       console.warn('Ocean4 init failed, falling back to Gerstner:', err);
@@ -104,14 +105,36 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   const PLANE_SIZE = WAVE_TILE * TILE_COUNT;    // 9600m
   const SEG_PER_TILE = IS_MOBILE ? 192 : 384;   // Phil's 384 on desktop; half on mobile
   const SEGMENTS     = SEG_PER_TILE * TILE_COUNT;
-  const waves = new Ocean4(renderer, {
+
+  // Poor man's cascaded ocean, inspired by Attila Schroeder's WebGPU-IFFT-Ocean
+  // (https://spiri0.github.io/Threejs-WebGPU-IFFT-Ocean/). His implementation
+  // runs 3 simultaneous FFT cascades with different tile sizes so that big
+  // swell, mid wind-chop, and tiny ripples all coexist on the surface. His
+  // full system is a multi-day integration (quadtree chunks + custom material);
+  // we instead instantiate 3 Ocean4 instances at different scales and sum the
+  // displacement textures in the vertex shader. Poor-man's version but delivers
+  // most of the visual richness with a stack we already trust.
+  //
+  // Opt-in via ?ocean=cascaded (costs ~60% FPS over single cascade — worth it
+  // when you want the mega-geil look, too heavy as default for the bird-sim
+  // where the ocean isn't always the focus).
+  const urlParams = new URLSearchParams(location.search);
+  const CASCADES_ENABLED = !IS_MOBILE && urlParams.get('ocean') === 'cascaded';
+  const cascadeA = new Ocean4(renderer, {
     Res: IS_MOBILE ? 256 : 512,
-    Siz: WAVE_TILE,
-    // Phillips-Spektrum: dominante Wellenlänge ≈ 2π·WSp²/g.
-    // WSp 9 → ~52m peak λ, hohe Frequenz, kurze wind-chop waves.
-    WSp: 9, WHd: 295, Chp: 2.8,
-    Spd: 1.3,
+    Siz: WAVE_TILE,                              // 2400m — dominant swell & medium waves
+    WSp: 9, WHd: 295, Chp: 2.8, Spd: 1.3,
   });
+  const cascadeB = CASCADES_ENABLED ? new Ocean4(renderer, {
+    Res: 256,
+    Siz: 400,                                    // 400m — wind chop, short wavelengths
+    WSp: 6, WHd: 280, Chp: 2.2, Spd: 1.6,
+  }) : null;
+  const cascadeC = CASCADES_ENABLED ? new Ocean4(renderer, {
+    Res: 256,
+    Siz: 80,                                     // 80m — tiny ripples/sparkle
+    WSp: 3.5, WHd: 310, Chp: 1.8, Spd: 2.2,
+  }) : null;
 
   const geometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, SEGMENTS, SEGMENTS);
   const uvAttr = geometry.attributes.uv;
@@ -120,19 +143,24 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   }
 
   const material = new MeshBasicNodeMaterial();
-  // Raw displacement values are in world meters. We DAMPEN the vertical
-  // component (Y) heavily — Phil's permutation shader pre-multiplies Y by 2.25
-  // for dramatic ocean look, but for a bird-simulator the resulting ±3-5m
-  // swell makes the sea surface appear to rise/fall unrealistically. Keep
-  // full horizontal choppiness (X, Z) so wave faces still skew realistically.
-  const dispSample = texture(waves.dispMapTexture, uv());
-  const dampedDisp = vec3(dispSample.x, dispSample.y.mul(0.35), dispSample.z);
+  // Sample each cascade at a UV scaled to its tile size. Main cascade uses the
+  // existing vertex UVs; B and C repeat more frequently across the plane to
+  // get their higher-frequency content into the vertex geometry.
+  const uvScaleB = WAVE_TILE / 400;   // 6× — cascade B repeats 6× per main tile
+  const uvScaleC = WAVE_TILE / 80;    // 30× — cascade C repeats 30× per main tile
+  const dispA = texture(cascadeA.dispMapTexture, uv());
+  const dispB = CASCADES_ENABLED ? texture(cascadeB.dispMapTexture, uv().mul(uvScaleB)) : null;
+  const dispC = CASCADES_ENABLED ? texture(cascadeC.dispMapTexture, uv().mul(uvScaleC)) : null;
+
+  // Weighted sum: main cascade at full weight, B at 0.5, C at 0.25 (tiny
+  // ripples contribute to surface texture but shouldn't dominate). Y is still
+  // damped to 0.35 overall to avoid the sea-sick vertical swell.
+  let sumDisp = dispA.xyz;
+  if (CASCADES_ENABLED) {
+    sumDisp = sumDisp.add(dispB.xyz.mul(0.5)).add(dispC.xyz.mul(0.25));
+  }
+  const dampedDisp = vec3(sumDisp.x, sumDisp.y.mul(0.35), sumDisp.z);
   material.positionNode = positionLocal.add(dampedDisp);
-  // Phil's Ocean4 stores WORLD-space normals packed (x, z, y) in RGB, 0..1
-  // range. We sample directly in the color shader (see below) — setting
-  // material.normalNode via normalMap() gave a near-flat result because
-  // Phil's map isn't in tangent space, so normalMap's tangent transform
-  // was neutering the perturbation.
 
   const uSunDir     = uniform(new THREE.Vector3().copy(sun.position).normalize());
   const uSunColor   = uniform(new THREE.Color(0xfff0d4));
@@ -151,9 +179,21 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
     const V = normalize(cameraPosition.sub(wp));
     const L = normalize(uSunDir);
 
-    // Sample Phil's normal map directly — WORLD-space normal packed (x, z, y).
-    const nTex = texture(waves.normMapTexture, uv()).xyz.mul(2.0).sub(1.0);
-    const N = normalize(vec3(nTex.x, nTex.z, nTex.y));
+    // Sum normal maps across cascades to get shading that reflects the full
+    // multi-scale surface. Each map is packed world-space normal (x, z, y).
+    // Adding decoded normals and re-normalizing is an approximation — not
+    // physically correct, but looks good in practice and way cheaper than
+    // re-computing normals from the summed displacement via derivatives.
+    const nA = texture(cascadeA.normMapTexture, uv()).xyz.mul(2.0).sub(1.0);
+    let nSum = vec3(nA.x, nA.z, nA.y);
+    if (CASCADES_ENABLED) {
+      const nB = texture(cascadeB.normMapTexture, uv().mul(uvScaleB)).xyz.mul(2.0).sub(1.0);
+      const nC = texture(cascadeC.normMapTexture, uv().mul(uvScaleC)).xyz.mul(2.0).sub(1.0);
+      nSum = nSum
+        .add(vec3(nB.x.mul(0.5), nB.z.mul(0.5), nB.y.mul(0.5)))
+        .add(vec3(nC.x.mul(0.25), nC.z.mul(0.25), nC.y.mul(0.25)));
+    }
+    const N = normalize(nSum);
 
     // Distort the mirror UVs strongly by the normal's world XZ — this is what
     // makes crests/troughs visible as shimmer in the reflection.
@@ -198,11 +238,15 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   // when viewed from below anyway. Hiding the mesh when the bird is under
   // water skips (a) the 2.36M-vertex shader and (b) the reflector render
   // pass. Ocean4 compute also paused — player won't notice waves freezing
-  // while submerged.
+  // while submerged. Also pauses B and C cascades if enabled.
   function update(_dt, birdAltitude) {
     const submerged = birdAltitude !== undefined && birdAltitude < WATER_LEVEL;
     mesh.visible = !submerged;
-    if (!submerged) waves.update();
+    if (!submerged) {
+      cascadeA.update();
+      if (cascadeB) cascadeB.update();
+      if (cascadeC) cascadeC.update();
+    }
   }
   return { mesh: waterGroup, update };
 }

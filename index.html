@@ -610,6 +610,10 @@
         label.textContent = 'iFFT · WebGPU';
         dot.classList.remove('fallback');
         document.getElementById('water-mode').title = 'Waves: WGSL compute iFFT (Ocean4) on WebGPURenderer';
+      } else if (path === 'iFFT ×3 (WebGPU)') {
+        label.textContent = 'iFFT ×3 · WebGPU';
+        dot.classList.remove('fallback');
+        document.getElementById('water-mode').title = 'Waves: 3 cascaded iFFT spectra (Attila-inspired) on WebGPURenderer';
       } else if (path === 'Gerstner') {
         label.textContent = 'Gerstner' + rendererSuffix;
         dot.classList.add('fallback');
