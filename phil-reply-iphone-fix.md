@@ -17,10 +17,10 @@ ever gets stranded there again. Could you give it another try when you
 have a moment? Same URL — you may need to re-install the home-screen
 icon since iOS caches aggressively.
 
-Thanks also for the link to Attila's full-featured Ocean — I'll have a
-look. And I've already updated birdybird's credits overlay to name him
-alongside you, with a link to his three.js forum profile. If you can
-share the GitHub URL you mentioned, I'll add that too.
+Thanks also for pointing me to Attila's work — just saw his full-featured
+WebGPU iFFT ocean demo (cascaded spectra, foam, the works). That thing is
+stunning. Credits overlay now links his GitHub (github.com/Spiri0) and
+that demo alongside your materials.
 
 Cheers,
 Mathias
