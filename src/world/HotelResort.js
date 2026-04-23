@@ -90,9 +90,12 @@ function createWaterSlide(group, x, y, z, height, color) {
 }
 
 function createPalmTree(group, x, y, z, height = 8) {
+  // Scale trunk + crown with height so a 20m palm doesn't have a 0.3m trunk
+  // (which looked like a pencil next to 15m forest trees).
+  const scale = height / 8;
   // Trunk — slim, slightly tapered
   const trunkMat = makeMat(0x8B6914);
-  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.32, height, 6);
+  const trunkGeo = new THREE.CylinderGeometry(0.18 * scale, 0.32 * scale, height, 6);
   const trunk = new THREE.Mesh(trunkGeo, trunkMat);
   trunk.position.set(x, y + height / 2, z);
   group.add(trunk);
@@ -101,15 +104,17 @@ function createPalmTree(group, x, y, z, height = 8) {
   // — reads clearly as a palm, not a sphere.
   const frondMat = makeMat(0x2d7a3d);
   const frondCount = 7;
+  const frondLen = 3.2 * scale;
+  const frondRadius = 1.4 * scale;
   for (let i = 0; i < frondCount; i++) {
-    const frondGeo = new THREE.ConeGeometry(0.35, 3.2, 3);
+    const frondGeo = new THREE.ConeGeometry(0.35 * scale, frondLen, 3);
     const frond = new THREE.Mesh(frondGeo, frondMat);
     const angle = (i / frondCount) * Math.PI * 2;
     const tilt = -0.25 - Math.random() * 0.35; // droop downward
     frond.position.set(
-      x + Math.cos(angle) * 1.4,
-      y + height + 0.2,
-      z + Math.sin(angle) * 1.4,
+      x + Math.cos(angle) * frondRadius,
+      y + height + 0.2 * scale,
+      z + Math.sin(angle) * frondRadius,
     );
     frond.rotation.z = Math.cos(angle) * Math.PI * 0.5 - tilt * Math.sin(angle);
     frond.rotation.x = tilt;
@@ -121,7 +126,7 @@ function createPalmTree(group, x, y, z, height = 8) {
 
   // Central cluster hiding the frond bases
   const hubMat = makeMat(0x1f5a2e);
-  const hub = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 0), hubMat);
+  const hub = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 * scale, 0), hubMat);
   hub.position.set(x, y + height, z);
   group.add(hub);
 }
@@ -152,11 +157,14 @@ function createResort(groundY) {
   createWaterSlide(g, -20, y, 38, 9, 0xff4444);
   createWaterSlide(g, -35, y, 35, 6, 0x44dd88);
 
-  // Palm trees around pool (fewer for performance)
+  // Palm trees around pool (fewer for performance). Forest trees are
+  // 10-18m (TRUNK_LENGTH_MIN/MAX in WorldBuilder). Real-world palms are
+  // 15-25m. We bump the range to 14-22m so they don't look comically
+  // short next to the regular forest.
   for (let i = 0; i < 6; i++) {
     const px = randomRange(-40, 50);
     const pz = randomRange(10, 50);
-    createPalmTree(g, px, y, pz, 6 + Math.random() * 5);
+    createPalmTree(g, px, y, pz, 14 + Math.random() * 8);
   }
 
   // Loungers (fewer for performance)
