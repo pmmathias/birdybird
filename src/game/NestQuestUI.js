@@ -17,18 +17,19 @@ export class NestQuestUI {
     const hud = document.createElement('div');
     hud.id = 'nq-hud';
     hud.innerHTML = `
-      <div class="nq-timer"><span id="nq-time">5:00</span></div>
-      <div class="nq-level">Level <b id="nq-level">1</b></div>
-      <div class="nq-inv">
-        <span class="nq-slot" id="nq-slot-stick">🪵 <b id="nq-sticks">0</b>/<b id="nq-sticks-need">1</b></span>
-        <span class="nq-slot" id="nq-slot-worm">🪱 <b id="nq-worms">0</b>/<b id="nq-worms-need">1</b></span>
-        <span class="nq-slot" id="nq-slot-ring">💍 <b id="nq-rings">0</b></span>
-      </div>
       <div class="nq-hint" id="nq-hint">Find a glowing tree + a worm, return to the nest</div>
+      <div class="nq-row">
+        <span class="nq-chip nq-chip-time" id="nq-timer-chip"><span id="nq-time">5:00</span></span>
+        <span class="nq-chip nq-chip-lvl">L<b id="nq-level">1</b></span>
+        <span class="nq-chip nq-slot" id="nq-slot-stick">🪵 <b id="nq-sticks">0</b>/<b id="nq-sticks-need">1</b></span>
+        <span class="nq-chip nq-slot" id="nq-slot-worm">🪱 <b id="nq-worms">0</b>/<b id="nq-worms-need">1</b></span>
+        <span class="nq-chip nq-slot" id="nq-slot-ring">💍 <b id="nq-rings">0</b></span>
+      </div>
     `;
     document.body.appendChild(hud);
     this._hud = hud;
     this._timeEl = document.getElementById('nq-time');
+    this._timerChipEl = document.getElementById('nq-timer-chip');
     this._sticksEl = document.getElementById('nq-sticks');
     this._sticksNeedEl = document.getElementById('nq-sticks-need');
     this._wormsEl = document.getElementById('nq-worms');
@@ -76,7 +77,7 @@ export class NestQuestUI {
     const mm = Math.floor(total / 60);
     const ss = total % 60;
     this._timeEl.textContent = mm + ':' + String(ss).padStart(2, '0');
-    this._timeEl.classList.toggle('warn', total <= 30 && !nq.gameOver);
+    this._timerChipEl.classList.toggle('warn', total <= 30 && !nq.gameOver);
 
     this._sticksEl.textContent = nq.sticks;
     this._wormsEl.textContent = nq.worms;

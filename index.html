@@ -276,15 +276,18 @@
     }
     .rr-levelup-biome:empty { display: none; }
 
-    /* --- Nest Quest HUD --- */
+    /* --- Nest Quest HUD ---
+       Bottom-center pill row to leave the upper sky free. Flight-stats
+       overlay lives at bottom-left (desktop only) so the HUD doesn't
+       collide there. */
     #nq-hud {
       position: fixed;
-      top: calc(max(env(safe-area-inset-top), 10px) + 48px);
+      bottom: calc(max(env(safe-area-inset-bottom), 10px) + 4px);
       left: 50%; transform: translateX(-50%);
       z-index: 850;
       display: none;
       flex-direction: column; align-items: center;
-      gap: 6px;
+      gap: 4px;
       pointer-events: none;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       font-variant-numeric: tabular-nums;
@@ -292,27 +295,33 @@
       max-width: calc(100vw - 24px);
     }
     #nq-hud.visible { display: flex; }
-    #nq-hud .nq-timer {
-      font-size: 40px; font-weight: 900; color: #ffe088;
-      line-height: 1;
+    #nq-hud .nq-row {
+      display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;
     }
-    #nq-hud .nq-timer.warn { color: #ff7766; animation: rr-pulse 0.8s ease-in-out infinite; }
-    #nq-hud .nq-level {
-      font-size: 13px; color: rgba(255,255,255,0.85); letter-spacing: 1px;
-      text-transform: uppercase; margin-top: -2px;
-    }
-    #nq-hud .nq-level b { color: #88ddff; font-size: 15px; }
-    #nq-hud .nq-inv {
-      display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
-    }
-    #nq-hud .nq-slot {
+    #nq-hud .nq-chip {
+      display: inline-flex; align-items: center; gap: 4px;
       padding: 5px 10px; border-radius: 999px;
       background: rgba(10, 22, 40, 0.7);
       border: 1px solid rgba(96, 192, 255, 0.25);
       color: #e0e8f0;
-      font-size: 12px; font-weight: 700;
+      font-size: 13px; font-weight: 700; line-height: 1;
       transition: transform 0.2s, border-color 0.3s, background 0.3s;
     }
+    #nq-hud .nq-chip-time {
+      background: rgba(10, 22, 40, 0.85);
+      color: #ffe088; font-size: 15px;
+      padding: 6px 12px;
+    }
+    #nq-hud .nq-chip-time.warn {
+      color: #ff7766;
+      animation: rr-pulse 0.8s ease-in-out infinite;
+    }
+    #nq-hud .nq-chip-lvl {
+      background: rgba(34, 132, 204, 0.25);
+      border-color: rgba(96, 192, 255, 0.4);
+      letter-spacing: 0.5px;
+    }
+    #nq-hud .nq-chip-lvl b { color: #88ddff; }
     #nq-hud .nq-slot b { color: #ffdd44; }
     #nq-hud .nq-slot.done {
       background: rgba(68, 221, 136, 0.2);
@@ -326,12 +335,17 @@
       100% { transform: scale(1); }
     }
     #nq-hud .nq-hint {
-      font-size: 12px; color: rgba(255, 255, 255, 0.75);
-      background: rgba(10, 22, 40, 0.6);
-      padding: 4px 10px; border-radius: 999px;
+      font-size: 11px; color: rgba(255, 255, 255, 0.7);
+      background: rgba(10, 22, 40, 0.55);
+      padding: 3px 9px; border-radius: 999px;
       max-width: 90vw; text-align: center;
     }
     #nq-hud .nq-hint.urgent { color: #ffdd44; font-weight: 700; }
+    /* On narrow screens, hide the helper sentence — chips are self-explanatory */
+    @media (max-width: 520px) {
+      #nq-hud .nq-hint { display: none; }
+      #nq-hud .nq-hint.urgent { display: block; }
+    }
 
     /* Quest-complete mid-game flash */
     .nq-complete-flash {
