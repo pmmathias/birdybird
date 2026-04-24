@@ -77,19 +77,41 @@
       border-color: rgba(96, 192, 255, 0.4);
       color: #fff;
     }
-    /* Primary logo-style link */
+    /* Primary back-to-blog CTA — bright gradient + soft pulsing glow so
+       players can find the way back even after a long flight session. */
     .tb-primary {
-      background: linear-gradient(135deg, rgba(32, 128, 204, 0.35), rgba(64, 160, 255, 0.25));
-      border-color: rgba(96, 192, 255, 0.5);
+      background: linear-gradient(135deg, #22d3ee, #0ea5e9);
+      border-color: rgba(255, 255, 255, 0.35);
       color: #fff;
-      font-weight: 600;
-      font-size: 13px;
-      padding: 8px 14px;
-      box-shadow: 0 2px 8px rgba(32, 128, 204, 0.2);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 9px 16px;
+      box-shadow:
+        0 0 0 0 rgba(34, 211, 238, 0.55),
+        0 4px 16px rgba(34, 211, 238, 0.35);
+      animation: tb-primary-pulse 2.8s ease-in-out infinite;
+    }
+    @keyframes tb-primary-pulse {
+      0%, 100% {
+        box-shadow:
+          0 0 0 0 rgba(34, 211, 238, 0.55),
+          0 4px 16px rgba(34, 211, 238, 0.35);
+      }
+      50% {
+        box-shadow:
+          0 0 0 7px rgba(34, 211, 238, 0),
+          0 4px 20px rgba(34, 211, 238, 0.6);
+      }
     }
     .tb-primary:hover {
-      background: linear-gradient(135deg, rgba(32, 128, 204, 0.55), rgba(64, 160, 255, 0.45));
-      box-shadow: 0 2px 14px rgba(64, 160, 255, 0.4);
+      background: linear-gradient(135deg, #06b6d4, #0284c7);
+      box-shadow: 0 6px 22px rgba(34, 211, 238, 0.7);
+      animation: none;
+      transform: translateY(-1px);
+    }
+    /* Respect reduced-motion users — kill the pulse for them */
+    @media (prefers-reduced-motion: reduce) {
+      .tb-primary { animation: none; }
     }
     .tb-item .dot {
       width: 6px; height: 6px; border-radius: 50%;

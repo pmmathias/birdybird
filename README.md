@@ -1,5 +1,7 @@
 # birdybird
 
+[![Blog](https://img.shields.io/badge/Blog-ki--mathias.de-22d3ee?style=flat-square)](https://ki-mathias.de/en/flight-simulator.html)
+
 **Tilt-controlled bird flight arcade, built on Three.js + WebGPU.** Fly a
 stork across a procedural world with your phone as the stick — lean left to
 bank left, shake to flap. Works on desktop too, with a webcam-pose mode
@@ -8,6 +10,11 @@ bank left, shake to flap. Works on desktop too, with a webcam-pose mode
 [**▶ Play live**](https://pmmathias.github.io/birdybird/) ·
 [try a specific world](https://pmmathias.github.io/birdybird/?seed=42) ·
 [cascaded ocean](https://pmmathias.github.io/birdybird/?ocean=cascaded)
+
+> 📖 **Read the story** — [Fourier, Ocean Waves and 65,536 Frequencies](https://ki-mathias.de/en/flight-simulator.html)
+> ([German version](https://ki-mathias.de/vogelsimulator.html)): how the iFFT ocean works, the WebGPU migration,
+> and the rest of the tech under the hood. Part of the blog at
+> [**ki-mathias.de**](https://ki-mathias.de) — mathematical and AI-related writing.
 
 Sister repo to [VogelSimulator](https://github.com/pmmathias/VogelSimulator);
 birdybird is where the experimental game layer and WebGPU port live. The
@@ -176,3 +183,8 @@ and the third-party notices — in particular, `src/vendor/Ocean3.js` and
 enabled is non-commercial. Commercial deployments need to swap to the
 built-in Gerstner-wave fallback (`_createGerstnerWater` in
 `src/world/WaterPlane.js`), which is MIT along with the rest of the repo.
+
+---
+
+More of my writing on maths, graphics and AI tooling lives at
+[**ki-mathias.de**](https://ki-mathias.de) · [Fourier &amp; Ocean Waves blog post (EN)](https://ki-mathias.de/en/flight-simulator.html) · [DE](https://ki-mathias.de/vogelsimulator.html).
