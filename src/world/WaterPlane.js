@@ -89,7 +89,7 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
     Fn, positionLocal, texture, normalMap, uv,
     vec2, vec3, float, uniform,
     positionWorld, cameraPosition, normalWorld,
-    normalize, dot, max, mix, pow, reflector,
+    normalize, dot, max, mix, pow, smoothstep, reflector,
   } = TSL;
 
   // Phil's default tile + params verbatim (from sdem_ocean4_gpu.html):
@@ -258,6 +258,27 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   const waterGroup = new THREE.Group();
   waterGroup.add(mesh);
 
+  // Cheap faked underwater cap — a downward-facing plane that simulates
+  // Snell's window (bright overhead) + total-internal reflection (dark
+  // seabed-mirror) near the horizon. No actual reflection pass: purely a
+  // two-colour blend driven by the view ray's vertical component. Water
+  // critical angle is ~48.6°, so cos ≈ 0.66; smoothstep transitions
+  // around that value.
+  const capGeo = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, 1, 1);
+  const capMat = new MeshBasicNodeMaterial({ side: THREE.BackSide, fog: true });
+  capMat.colorNode = Fn(() => {
+    const viewRay = normalize(positionWorld.sub(cameraPosition));
+    const t = smoothstep(float(0.50), float(0.92), viewRay.y);
+    const snellColor = vec3(0.42, 0.68, 0.78);
+    const tirColor   = vec3(0.02, 0.08, 0.10);
+    return mix(tirColor, snellColor, t);
+  })();
+  const cap = new THREE.Mesh(capGeo, capMat);
+  cap.rotation.x = -Math.PI / 2;
+  cap.position.y = WATER_LEVEL - 0.05;
+  cap.visible = false;
+  waterGroup.add(cap);
+
   // FPS win: with default back-face culling the water plane is invisible
   // when viewed from below anyway. Hiding the mesh when the bird is under
   // water skips (a) the 2.36M-vertex shader and (b) the reflector render
@@ -266,6 +287,7 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   function update(_dt, birdAltitude) {
     const submerged = birdAltitude !== undefined && birdAltitude < WATER_LEVEL;
     mesh.visible = !submerged;
+    cap.visible = submerged;
     if (!submerged) {
       cascadeA.update();
       if (cascadeB) cascadeB.update();
