@@ -652,8 +652,8 @@
 
       <div class="opt-group" data-option="ocean">
         <h3>Ocean Quality</h3>
-        <label><input type="radio" name="ocean" value="default" checked><span><b>Single Cascade (default)</b><span class="opt-desc">Phil Crowther's Ocean4 iFFT — fast, stable ~120 fps on desktop WebGPU.</span></span></label>
-        <label data-requires="webgpu"><input type="radio" name="ocean" value="cascaded"><span><b>iFFT ×3 Cascaded (Attila-inspired)</b><span class="opt-desc">Three FFT spectra layered for richer multi-scale waves. Costs ~60% FPS.</span></span></label>
+        <label data-requires="webgpu"><input type="radio" name="ocean" value="cascaded"><span><b>iFFT ×3 Cascaded (default, desktop)</b><span class="opt-desc">Three FFT spectra layered for richer multi-scale waves. Costs ~60% FPS vs single.</span></span></label>
+        <label><input type="radio" name="ocean" value="single"><span><b>Single Cascade</b><span class="opt-desc">Phil Crowther's Ocean4 iFFT — fast path, default on mobile.</span></span></label>
       </div>
 
       <div id="options-apply-note">
@@ -735,27 +735,34 @@
       // Reflect current URL params as the selected radios
       const params = new URLSearchParams(location.search);
       const rendererParam = params.get('renderer');  // 'webgpu' | 'webgl' | null
-      const oceanParam    = params.get('ocean');     // 'cascaded' | null
+      const oceanParam    = params.get('ocean');     // 'single' | 'cascaded' | null
       const rendererVal = rendererParam === 'webgpu' ? 'webgpu'
                        : rendererParam === 'webgl'  ? 'webgl'
                        : 'auto';
-      const oceanVal    = oceanParam === 'cascaded' ? 'cascaded' : 'default';
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+        || navigator.maxTouchPoints > 1;
+      // Default varies by device: desktop WebGPU → cascaded, mobile → single
+      const oceanDefault = (isMobile || !hasWebGPU) ? 'single' : 'cascaded';
+      const oceanVal    = oceanParam === 'single'   ? 'single'
+                        : oceanParam === 'cascaded' ? 'cascaded'
+                        : oceanDefault;
       const rRadio = oov.querySelector(`input[name="renderer"][value="${rendererVal}"]`);
       const oRadio = oov.querySelector(`input[name="ocean"][value="${oceanVal}"]`);
       if (rRadio) rRadio.checked = true;
       if (oRadio) oRadio.checked = true;
 
-      // Apply: rebuild URL with new params and reload
+      // Apply: rebuild URL with new params and reload. Only set the ocean
+      // param when it differs from this device's default, so URLs stay clean.
       function applyOptionChange() {
         const r = oov.querySelector('input[name="renderer"]:checked')?.value || 'auto';
-        const o = oov.querySelector('input[name="ocean"]:checked')?.value    || 'default';
+        const o = oov.querySelector('input[name="ocean"]:checked')?.value    || oceanDefault;
         const newParams = new URLSearchParams(location.search);
         // Renderer
         if (r === 'auto') newParams.delete('renderer');
         else              newParams.set('renderer', r);
         // Ocean
-        if (o === 'default') newParams.delete('ocean');
-        else                 newParams.set('ocean', o);
+        if (o === oceanDefault) newParams.delete('ocean');
+        else                    newParams.set('ocean', o);
         // Preserve skipcalib and other existing params naturally
         const queryString = newParams.toString();
         location.search = queryString ? '?' + queryString : '';

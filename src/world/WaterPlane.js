@@ -40,12 +40,16 @@ export async function createWaterPlane(sun, renderer) {
   const REFLECTION_SIZE = IS_MOBILE ? 256 : 512;
 
   if (isWebGPU) {
+    // Ocean-cascade decision: desktop defaults to cascaded ×3, mobile to
+    // single for perf. `?ocean=single` opts desktop out; `?ocean=cascaded`
+    // forces it (no effect on mobile — still single).
+    const oceanParam = new URLSearchParams(location.search).get('ocean');
+    const CASCADES_ENABLED = !IS_MOBILE && oceanParam !== 'single';
     // Try iFFT first; Gerstner is only the fallback.
     try {
-      const water = _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE);
-      const cascaded = new URLSearchParams(location.search).get('ocean') === 'cascaded';
-      window.__waterPath = cascaded ? 'iFFT ×3 (WebGPU)' : 'iFFT (WebGPU)';
-      console.log(`Water: WebGPU → Ocean4 iFFT compute${cascaded ? ' [cascaded, Attila-inspired]' : ''}`);
+      const water = _createIFFTWaterWebGPU(sun, renderer, PLANE_SIZE, SEGMENTS, IS_MOBILE, CASCADES_ENABLED);
+      window.__waterPath = CASCADES_ENABLED ? 'iFFT ×3 (WebGPU)' : 'iFFT (WebGPU)';
+      console.log(`Water: WebGPU → Ocean4 iFFT compute${CASCADES_ENABLED ? ' [cascaded, Attila-inspired]' : ''}`);
       return water;
     } catch (err) {
       console.warn('Ocean4 init failed, falling back to Gerstner:', err);
@@ -84,7 +88,7 @@ function _checkIFFTSupport(renderer) {
 // ------------------------------------------------------------------
 // Path 3a: WebGPU iFFT via Phil Crowther's Ocean4 (compute shaders)
 // ------------------------------------------------------------------
-function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegments, IS_MOBILE) {
+function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegments, IS_MOBILE, CASCADES_ENABLED) {
   const {
     Fn, positionLocal, texture, normalMap, uv,
     vec2, vec3, float, uniform,
@@ -115,11 +119,8 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   // displacement textures in the vertex shader. Poor-man's version but delivers
   // most of the visual richness with a stack we already trust.
   //
-  // Opt-in via ?ocean=cascaded (costs ~60% FPS over single cascade — worth it
-  // when you want the mega-geil look, too heavy as default for the bird-sim
-  // where the ocean isn't always the focus).
-  const urlParams = new URLSearchParams(location.search);
-  const CASCADES_ENABLED = !IS_MOBILE && urlParams.get('ocean') === 'cascaded';
+  // Desktop defaults to cascaded ×3 (decided at the caller level); mobile
+  // is always single. `?ocean=single` opts out on desktop.
   // Cascaded-mode inspired by Attila's WebGPU-IFFT-Ocean LENGTH_SCALES
   // [250, 17, 5]. His version cascades at GEOMETRY level (quadtree chunks
   // with varying vertex density per cascade). We have a flat uniform plane

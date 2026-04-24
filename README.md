@@ -9,7 +9,7 @@ bank left, shake to flap. Works on desktop too, with a webcam-pose mode
 
 [**▶ Play live**](https://pmmathias.github.io/birdybird/) ·
 [try a specific world](https://pmmathias.github.io/birdybird/?seed=42) ·
-[cascaded ocean](https://pmmathias.github.io/birdybird/?ocean=cascaded)
+[single-cascade ocean (lighter)](https://pmmathias.github.io/birdybird/?ocean=single)
 
 > 📖 **Read the story** — [Fourier, Ocean Waves and 65,536 Frequencies](https://ki-mathias.de/en/flight-simulator.html)
 > ([German version](https://ki-mathias.de/vogelsimulator.html)): how the iFFT ocean works, the WebGPU migration,
@@ -32,9 +32,10 @@ flight physics + world generator come from VogelSim.
   browsers). Swap at runtime from the Options dialog or via `?renderer=…`.
 - **Phil Crowther's Ocean4 iFFT ocean** running as a WGSL compute shader on
   the WebGPU path — real Phillips-spectrum iFFT waves with mirror
-  reflections. Single cascade by default; opt into a **3×-cascaded layered
-  spectrum** (Attila Schroeder-inspired) via `?ocean=cascaded` for richer
-  multi-scale surface detail at ~60 % FPS cost.
+  reflections. **Desktop WebGPU defaults to a 3×-cascaded layered
+  spectrum** (Attila Schroeder-inspired) for richer multi-scale surface
+  detail; mobile + `?ocean=single` fall back to the lighter single
+  cascade (~60 % less FPS cost).
 - **Procedural L-system forest** (red-reddington) with per-cluster
   `InstancedMesh` splitting for frustum culling — ~3× FPS on WebGPU over
   the naive single-mesh version.
@@ -75,7 +76,7 @@ Handy for debugging and sharing specific scenarios.
 | `?game=nest\|ringrush\|free` | Start in a specific game mode.                          |
 | `?level=N`             | Jump to a later biome (default 1).                            |
 | `?renderer=webgpu\|webgl\|auto` | Force a renderer path; default `auto`.               |
-| `?ocean=cascaded`      | Opt into 3-cascade iFFT ocean (WebGPU only, ~60 % FPS cost).  |
+| `?ocean=single\|cascaded` | Override ocean cascades (desktop WebGPU = cascaded default). |
 | `?skipcalib=1`         | Skip the mobile tilt-calibration wizard (testing only).       |
 | `?x=…&y=…&z=…&yaw=…`   | Spawn at a specific position/heading.                         |
 | `?speed=…`             | Spawn with a specific initial forward velocity.               |
