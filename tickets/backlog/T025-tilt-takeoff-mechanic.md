@@ -1,6 +1,7 @@
 # T025: Tilt-To-Takeoff Mechanic
-**Priority:** P2 | **Phase:** Polish | **Size:** M
-**Depends on:** T024 (walking pose first)
+**Priority:** P3 (blocked behind asset work) | **Phase:** Polish | **Size:** M
+**Depends on:** T024 (walking pose) — currently deferred until Stork
+asset has Walk-/Idle-Morphs. See T024 status for details.
 
 ## Description
 

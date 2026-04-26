@@ -1,6 +1,7 @@
 # T026: Flare-Landing Mechanic
-**Priority:** P2 | **Phase:** Polish | **Size:** L
-**Depends on:** T024 (walking pose), T025 (takeoff)
+**Priority:** P3 (blocked behind asset work) | **Phase:** Polish | **Size:** L
+**Depends on:** T024 (walking pose), T025 (takeoff) — both deferred
+until Stork asset has Walk-/Idle-Morphs. See T024 for details.
 
 ## Description
 
