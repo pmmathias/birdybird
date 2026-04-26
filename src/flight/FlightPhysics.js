@@ -67,19 +67,29 @@ export class FlightPhysics {
     const speed = s.velocity.length();
     if (speed < 0.5) return 0;
 
-    // Project velocity onto the bird's pitch plane (forward × up) so a
-    // pure yaw rotation — where velocity lags behind the new forward
-    // for a moment — does NOT produce an artificial AoA spike. Real AoA
-    // is the angle in the pitch plane only; the sideways drift component
-    // belongs to lateral drag, not lift.
-    const velFwd = s.velocity.dot(s.forward);
-    const velUp = s.velocity.dot(s.up);
-    if (Math.hypot(velFwd, velUp) < 0.5) return 0;
+    // AoA in the world heading-vertical plane: angle between the bird's
+    // forward direction (pitch component) and the velocity vector
+    // (vertical component vs heading-projected component). Using world
+    // axes here — not the bird's local up — keeps a banked + yawing
+    // bird from generating a phantom AoA from kinematic coupling.
+    // Previous "project onto bird up" version mistakenly turned the
+    // sideways tilt of `s.up` after a bank into an apparent vertical
+    // velocity component, spiking CL → ~60 m/s² lift in mid-turn.
+    const fwdH = Math.hypot(s.forward.x, s.forward.z);
+    if (fwdH < 0.01) return 0;       // bird pointing straight up or down
 
-    // atan2(-velUp, velFwd): velUp < 0 means velocity points below the
-    // bird's up vector → bird's nose is pitched above flight path →
-    // positive AoA → lift.
-    return Math.atan2(-velUp, velFwd);
+    const fwdHX = s.forward.x / fwdH;
+    const fwdHZ = s.forward.z / fwdH;
+
+    const velHoriz = s.velocity.x * fwdHX + s.velocity.z * fwdHZ;
+    const velVert = s.velocity.y;
+
+    // Bird's pitch (forward.y above the horizontal); flight-path angle
+    // (velVert over the heading-aligned horizontal speed). Difference
+    // is the angle of attack.
+    const fwdAngle = Math.atan2(s.forward.y, fwdH);
+    const velAngle = Math.atan2(velVert, velHoriz);
+    return fwdAngle - velAngle;
   }
 
   /**
