@@ -34,6 +34,11 @@ export class FlightState {
     this.flapCooldown = 0;       // counts down to 0
     this.flapStrengthScale = 1;  // thrust multiplier from input strength
     this.wingSpread = 1.0;   // 0 = wings tucked, 1 = fully spread
+
+    // Speed-boost pickup (T—): seconds remaining of 2× cruise thrust.
+    // FlightPhysics adds a forward acceleration toward a target speed
+    // while this is positive.
+    this.speedBoostT = 0;
   }
 
   /** Update derived vectors from euler angles */

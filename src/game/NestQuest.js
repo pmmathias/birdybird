@@ -128,13 +128,19 @@ export class NestQuest {
     }
   }
 
-  /** External hook: a side-ring was collected → recharge the timer
-   *  by 30 s instead of awarding side-score points. The recharge IS
-   *  the reward; double-counting (time + score) was unbalanced. */
-  registerRingPickup() {
+  /** External hook: a clock pickup → +30 s on the timer. */
+  registerClockPickup() {
     this.rings++;
     this.timer += 30;
     if (this.onRingRecharge) this.onRingRecharge(30);
+  }
+
+  /** External hook: a speed-arrow pickup → 30 s of 2× speed boost.
+   *  Stacks (re-applied) by extending speedBoostT, not adding. */
+  registerSpeedPickup() {
+    const BOOST_DURATION = 30;
+    this.flightState.speedBoostT = Math.max(this.flightState.speedBoostT, BOOST_DURATION);
+    if (this.onSpeedBoost) this.onSpeedBoost(BOOST_DURATION);
   }
 
   update(dt) {

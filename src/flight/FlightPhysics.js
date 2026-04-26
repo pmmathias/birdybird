@@ -249,6 +249,21 @@ export class FlightPhysics {
       s.flapCooldown -= dt;
     }
 
+    // --- 7b. Speed-boost pickup ---
+    // While speedBoostT > 0, push the bird forward toward ~2× cruise.
+    // Acceleration tapers as we approach the target, so peak speed is
+    // bounded but you also feel an instant kick on pickup. Counts down
+    // in real time regardless of whether the bird is flapping.
+    if (s.speedBoostT > 0) {
+      const TARGET_BOOST_SPEED = 50;  // m/s, ~2× cruise (cruise ≈ 20-25 m/s)
+      const fwdSpeed = s.velocity.dot(s.forward);
+      if (fwdSpeed < TARGET_BOOST_SPEED) {
+        const accel = 35 * (1 - fwdSpeed / TARGET_BOOST_SPEED);
+        s.velocity.addScaledVector(s.forward, accel * dt);
+      }
+      s.speedBoostT = Math.max(0, s.speedBoostT - dt);
+    }
+
     // --- 8. Auto-trim pitch toward velocity ---
     // DISABLED during dive AND flap — prevents fighting thrust direction
     if (speed > 2 && s.wingSpread > 0.5 && s.flapPhase <= 0) {

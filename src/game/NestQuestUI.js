@@ -23,7 +23,8 @@ export class NestQuestUI {
         <span class="nq-chip nq-chip-lvl">L<b id="nq-level">1</b></span>
         <span class="nq-chip nq-slot" id="nq-slot-stick">🪵 <b id="nq-sticks">0</b>/<b id="nq-sticks-need">1</b></span>
         <span class="nq-chip nq-slot" id="nq-slot-worm">🪱 <b id="nq-worms">0</b>/<b id="nq-worms-need">1</b></span>
-        <span class="nq-chip nq-slot" id="nq-slot-ring">💍 <b id="nq-rings">0</b></span>
+        <span class="nq-chip nq-slot" id="nq-slot-clock">⏰ <b id="nq-clocks">0</b></span>
+        <span class="nq-chip nq-chip-boost" id="nq-boost-chip" style="display:none">⚡ <b id="nq-boost-time">0</b>s</span>
       </div>
     `;
     document.body.appendChild(hud);
@@ -34,7 +35,9 @@ export class NestQuestUI {
     this._sticksNeedEl = document.getElementById('nq-sticks-need');
     this._wormsEl = document.getElementById('nq-worms');
     this._wormsNeedEl = document.getElementById('nq-worms-need');
-    this._ringsEl = document.getElementById('nq-rings');
+    this._clocksEl = document.getElementById('nq-clocks');
+    this._boostChipEl = document.getElementById('nq-boost-chip');
+    this._boostTimeEl = document.getElementById('nq-boost-time');
     this._hintEl = document.getElementById('nq-hint');
     this._slotStick = document.getElementById('nq-slot-stick');
     this._slotWorm = document.getElementById('nq-slot-worm');
@@ -81,10 +84,19 @@ export class NestQuestUI {
 
     this._sticksEl.textContent = nq.sticks;
     this._wormsEl.textContent = nq.worms;
-    this._ringsEl.textContent = nq.rings;
+    this._clocksEl.textContent = nq.rings;
     this._sticksNeedEl.textContent = nq.sticksRequired;
     this._wormsNeedEl.textContent = nq.wormsRequired;
     document.getElementById('nq-level').textContent = nq.level;
+
+    // Speed-boost countdown chip — show only while a boost is active
+    const boostT = nq.flightState?.speedBoostT || 0;
+    if (boostT > 0) {
+      this._boostChipEl.style.display = '';
+      this._boostTimeEl.textContent = Math.ceil(boostT);
+    } else {
+      this._boostChipEl.style.display = 'none';
+    }
 
     this._slotStick.classList.toggle('done', nq.sticks >= nq.sticksRequired);
     this._slotWorm.classList.toggle('done', nq.worms >= nq.wormsRequired);
@@ -146,7 +158,16 @@ export class NestQuestUI {
     this._modal.classList.add('visible');
   }
 
-  /** Brief "+30s" flash next to the timer chip on a ring pickup. */
+  /** Big centred "⚡ SPEED BOOST" pop on speed-arrow pickup. */
+  flashSpeedBoost(seconds) {
+    const flash = document.createElement('div');
+    flash.className = 'nq-boost-flash';
+    flash.innerHTML = `<b>⚡ SPEED BOOST</b><br><span>${seconds}s · 2× speed</span>`;
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 1700);
+  }
+
+  /** Brief "+30s" flash next to the timer chip on a clock pickup. */
   flashTimerRecharge(seconds) {
     const chip = document.getElementById('nq-timer-chip');
     if (!chip) return;

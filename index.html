@@ -342,6 +342,43 @@
       max-width: 90vw; text-align: center;
     }
     #nq-hud .nq-hint.urgent { color: #ffdd44; font-weight: 700; }
+    /* Speed-boost chip while active */
+    #nq-hud .nq-chip-boost {
+      background: linear-gradient(135deg, rgba(96,212,255,0.9), rgba(34,160,224,0.9));
+      border-color: rgba(255,255,255,0.5);
+      color: #052838;
+      animation: nq-boost-pulse 0.9s ease-in-out infinite;
+    }
+    #nq-hud .nq-chip-boost b { color: #052838; }
+    @keyframes nq-boost-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(96,212,255,0.6); }
+      50%  { box-shadow: 0 0 14px 4px rgba(96,212,255,0.4); }
+      100% { box-shadow: 0 0 0 0 rgba(96,212,255,0.0); }
+    }
+    /* Big mid-screen flash on speed-pickup */
+    .nq-boost-flash {
+      position: fixed; top: 38%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 900;
+      background: radial-gradient(ellipse at center, rgba(96,212,255,0.4), rgba(10,22,40,0.5) 70%);
+      border: 2px solid rgba(96,212,255,0.8);
+      border-radius: 18px;
+      padding: 22px 36px;
+      font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: #fff; text-align: center;
+      pointer-events: none;
+      animation: nq-flash 1.7s ease-out forwards;
+      box-shadow: 0 0 60px rgba(96,212,255,0.6);
+    }
+    .nq-boost-flash b {
+      font-size: 32px; font-weight: 900; letter-spacing: 1px;
+      text-shadow: 0 0 18px rgba(96,212,255,0.8);
+      color: #aef0ff;
+    }
+    .nq-boost-flash span {
+      font-size: 13px; color: #c0e8ff;
+      letter-spacing: 1.5px; text-transform: uppercase;
+    }
     /* "+30s" recharge feedback when a ring is picked up */
     .nq-recharge-flash {
       position: absolute;

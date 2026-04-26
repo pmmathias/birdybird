@@ -293,18 +293,24 @@ if (gameMode === 'ringrush') {
     }, 0);
   }
 
-  // Side-rings: ring spawner runs without its own timer/level/game-over.
-  // Auto-start so collisions are active immediately — no calibration gate here.
-  const sideRings = new RingRush(scene, world, flightState, { startLevel: 1, ringsPerLevel: Infinity });
-  sideRings.start();
-  sideRings._gracePeriod = 0;
-  sideRings.onRingCollected = () => {
-    nestQuest.registerRingPickup();
+  // Side pickups for Nest Quest: clocks (+30s) and speed arrows (2×
+  // speed for 30s). Sparser than Ring-Rush rings so each find feels
+  // like a discovery rather than a guaranteed quota.
+  const { PickupSpawner } = await import('./game/PickupSpawner.js');
+  const pickupSpawner = new PickupSpawner(scene, world, flightState);
+  pickupSpawner.onClockPickup = () => {
+    nestQuest.registerClockPickup();
     if (flock) flock.triggerVisit();
     sfx.ringDing();
   };
-  window.__sideRings = sideRings;
-  ringRush = sideRings; // reuse the ringRush update-loop slot
+  pickupSpawner.onSpeedPickup = () => {
+    nestQuest.registerSpeedPickup();
+    if (flock) flock.triggerVisit();
+    sfx.ringDing();
+  };
+  nestQuest.onSpeedBoost = (sec) => nestQuestUI.flashSpeedBoost(sec);
+  window.__pickupSpawner = pickupSpawner;
+  ringRush = pickupSpawner; // reuse the update-loop slot (only needs .update(dt))
 
   // Nest mode doesn't need a separate landmark — the nest IS the landmark.
   // Remove the default Sunny-Islands lighthouse so we don't end up with
