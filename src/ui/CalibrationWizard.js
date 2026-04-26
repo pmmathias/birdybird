@@ -275,48 +275,104 @@ export class CalibrationWizard {
   async _runTestFlyStep(profile, stepIndex) {
     const totalSteps = getSteps().length + 1;
     this._overlay.innerHTML = `
-      <div style="color:#556677; font-size:12px; margin-bottom:18px; letter-spacing:1px;">
+      <div style="color:#556677; font-size:12px; margin-bottom:14px; letter-spacing:1px;">
         ${t('calib.step')} ${stepIndex + 1} / ${totalSteps}
       </div>
-      <div style="font-size:48px; margin-bottom:10px;">🦅</div>
-      <h2 style="font-size:22px; font-weight:bold; margin-bottom:8px;
+      <h2 style="font-size:24px; font-weight:bold; margin-bottom:6px;
         color:#60c0ff;">${t('calib.test.title')}</h2>
-      <p style="color:#aaccdd; font-size:15px; line-height:1.5;
-        white-space:pre-line; margin-bottom:14px; max-width:360px;">${t('calib.test.text')}</p>
-      <div style="position:relative; width:240px; height:200px;
-        margin-bottom:18px;
-        background:radial-gradient(ellipse at 50% 65%, rgba(96,192,255,0.12), transparent 75%);
-        border-radius:18px;">
-        <svg id="calib-bird" viewBox="-60 -35 120 70" width="220" height="130"
+      <p style="color:#aaccdd; font-size:14px; line-height:1.5;
+        white-space:pre-line; margin-bottom:16px; max-width:360px;">${t('calib.test.text')}</p>
+
+      <!-- Sky-stage: a horizon scene with banking bird, sized to feel
+           "alive" rather than schematic. -->
+      <div style="position:relative; width:300px; height:220px;
+        margin-bottom:14px; border-radius:20px; overflow:hidden;
+        background:linear-gradient(180deg,
+          #4d7eaa 0%, #88b4d4 55%, #c8d8b8 70%, #5a8a4a 100%);
+        box-shadow:0 8px 28px rgba(0,0,0,0.35),
+          inset 0 0 40px rgba(0,0,0,0.15);">
+        <!-- Soft sun glow upper-right -->
+        <div style="position:absolute; top:-30px; right:-30px;
+          width:120px; height:120px; border-radius:50%;
+          background:radial-gradient(circle, rgba(255,232,180,0.55), transparent 65%);
+          pointer-events:none;"></div>
+        <!-- Cloud shapes -->
+        <svg viewBox="0 0 300 220" width="300" height="220"
+          style="position:absolute; inset:0; pointer-events:none;">
+          <g fill="rgba(255,255,255,0.7)">
+            <ellipse cx="60" cy="50" rx="22" ry="9"/>
+            <ellipse cx="78" cy="48" rx="14" ry="7"/>
+            <ellipse cx="44" cy="52" rx="12" ry="6"/>
+          </g>
+          <g fill="rgba(255,255,255,0.5)">
+            <ellipse cx="220" cy="80" rx="26" ry="8"/>
+            <ellipse cx="240" cy="78" rx="14" ry="6"/>
+          </g>
+        </svg>
+        <!-- Bird, viewed from behind & above. Wings extend left/right so
+             roll is super legible; pitch shifts the bird up/down. -->
+        <svg id="calib-bird" viewBox="-70 -30 140 60" width="240" height="100"
           style="position:absolute; left:50%; top:50%;
             transform:translate(-50%,-50%);
             transition:transform 0.08s linear;
-            filter:drop-shadow(0 6px 14px rgba(0,0,0,0.4));">
-          <!-- Bird body, top-down view: chevron with two long wings -->
-          <path d="M -55 5 Q -30 -8 -8 -2 L 0 -10 L 8 -2 Q 30 -8 55 5
-                   Q 30 10 12 6 L 0 12 L -12 6 Q -30 10 -55 5 Z"
-            fill="#60c0ff" stroke="#a0d8ff" stroke-width="1.4"
-            stroke-linejoin="round"/>
-          <!-- Tail -->
-          <path d="M -3 6 L 0 16 L 3 6 Z" fill="#3088bb"/>
-          <!-- Head -->
-          <ellipse cx="0" cy="-5" rx="5" ry="6" fill="#a0d8ff"/>
-          <!-- Beak -->
-          <path d="M -2 -10 L 0 -16 L 2 -10 Z" fill="#ffd060"/>
-        </svg>
+            filter:drop-shadow(0 8px 18px rgba(0,0,0,0.5));">
+            <defs>
+              <linearGradient id="calib-wing" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#3a4858"/>
+                <stop offset="55%" stop-color="#1f2a3a"/>
+                <stop offset="100%" stop-color="#101822"/>
+              </linearGradient>
+              <linearGradient id="calib-body" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#506478"/>
+                <stop offset="100%" stop-color="#202b38"/>
+              </linearGradient>
+            </defs>
+            <!-- Wings: long, swept-back silhouette -->
+            <path d="M -65 4 Q -45 -10 -22 -4 Q -10 -1 -4 0
+                     Q -10 6 -22 8 Q -45 12 -65 4 Z"
+              fill="url(#calib-wing)" stroke="#0a1018" stroke-width="0.8"/>
+            <path d="M 65 4 Q 45 -10 22 -4 Q 10 -1 4 0
+                     Q 10 6 22 8 Q 45 12 65 4 Z"
+              fill="url(#calib-wing)" stroke="#0a1018" stroke-width="0.8"/>
+            <!-- Body -->
+            <ellipse cx="0" cy="0" rx="9" ry="14"
+              fill="url(#calib-body)" stroke="#0a1018" stroke-width="0.8"/>
+            <!-- Tail (closer to viewer) -->
+            <path d="M -4 13 L 0 23 L 4 13 Z" fill="#202b38" stroke="#0a1018" stroke-width="0.5"/>
+            <!-- Head -->
+            <ellipse cx="0" cy="-12" rx="5" ry="6" fill="#506478" stroke="#0a1018" stroke-width="0.6"/>
+            <!-- Eye glint -->
+            <circle cx="-1.5" cy="-13" r="0.9" fill="#ffe8a0"/>
+          </svg>
+        <!-- Direction labels under-stage -->
+        <div style="position:absolute; bottom:6px; left:10px;
+          color:rgba(255,255,255,0.7); font-size:10px; letter-spacing:1px;
+          font-weight:700;">← LEFT</div>
+        <div style="position:absolute; bottom:6px; right:10px;
+          color:rgba(255,255,255,0.7); font-size:10px; letter-spacing:1px;
+          font-weight:700;">RIGHT →</div>
       </div>
+
+      <!-- Live readout below stage -->
+      <div id="calib-test-readout" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+        font-size:12px; color:#88aacc; margin-bottom:18px; min-height:16px;
+        letter-spacing:0.5px;">${t('calib.live.waiting')}</div>
+
       <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
         <button id="calib-confirm" style="
-          padding:12px 26px; font-size:15px; font-weight:700;
+          padding:13px 28px; font-size:15px; font-weight:700;
           background:linear-gradient(135deg, #44dd88, #22aa66); color:#03210f;
-          border:none; border-radius:10px; cursor:pointer;
-          box-shadow:0 4px 16px rgba(68,221,136,0.35);">
+          border:none; border-radius:11px; cursor:pointer;
+          box-shadow:0 6px 20px rgba(68,221,136,0.4);
+          transition:transform 0.15s, box-shadow 0.15s;">
           ${t('calib.test.confirm')}
         </button>
         <button id="calib-redo-btn" style="
-          padding:12px 26px; font-size:15px;
-          background:rgba(255,255,255,0.08); color:#ccddff;
-          border:1px solid rgba(255,255,255,0.2); border-radius:10px;
+          padding:13px 28px; font-size:15px;
+          background:rgba(255,255,255,0.06);
+          backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+          color:#ccddff;
+          border:1px solid rgba(255,255,255,0.18); border-radius:11px;
           cursor:pointer;">
           ${t('calib.test.redo')}
         </button>
@@ -344,6 +400,7 @@ export class CalibrationWizard {
 
       // Drive bird transform from the LIVE input through the same profile
       // mapping the game uses, so what the user sees here matches in-game.
+      const readout = document.getElementById('calib-test-readout');
       let rafId = 0;
       const tick = () => {
         if (latest && bird) {
@@ -356,10 +413,20 @@ export class CalibrationWizard {
           const pitchNorm = Math.max(-1, Math.min(1,
             (pitchRaw * profile.pitchSign) / profile.pitchRange));
           const bankDeg = rollNorm * 45;
-          const yShift = pitchNorm * -28;
-          // Keep the centering translate first so the bird stays put
+          const yShift = pitchNorm * -32;
+          // Subtle wing flap animation when ~level (idle-style)
+          const idle = Math.abs(rollNorm) < 0.1 && Math.abs(pitchNorm) < 0.1;
+          const flap = idle ? Math.sin(performance.now() / 240) * 1.5 : 0;
           bird.style.transform =
-            `translate(-50%, -50%) rotate(${bankDeg}deg) translateY(${yShift}px)`;
+            `translate(-50%, -50%) rotate(${bankDeg + flap}deg) translateY(${yShift}px)`;
+          if (readout) {
+            const arrow = rollNorm < -0.15 ? '←'
+                        : rollNorm > 0.15 ? '→'
+                        : pitchNorm > 0.15 ? '↑'
+                        : pitchNorm < -0.15 ? '↓' : '·';
+            readout.textContent =
+              `${arrow}   roll ${(rollNorm * 100).toFixed(0)}%   pitch ${(pitchNorm * 100).toFixed(0)}%`;
+          }
         }
         rafId = requestAnimationFrame(tick);
       };
