@@ -121,6 +121,7 @@ export class NestQuestUI {
   _showModal() {
     const nq = this.nq;
     const nextBtn = document.getElementById('nq-next');
+    const retryBtn = document.getElementById('nq-retry');
     document.getElementById('nq-mod-title').textContent = nq.won
       ? `Level ${nq.level} complete!`
       : 'Time ran out';
@@ -129,16 +130,34 @@ export class NestQuestUI {
     const breakdown = document.getElementById('nq-mod-breakdown');
     if (nq.won) {
       const remaining = Math.ceil(nq.timer);
-      breakdown.innerHTML = `L${nq.level}: ${remaining}s + ${nq.rings}💍 + ${nq.level * 50} bonus = <b>${nq.finalScore}</b>`;
+      breakdown.innerHTML = `L${nq.level}: ${remaining}s + ${nq.level * 50} bonus = <b>${nq.finalScore}</b>`;
       nextBtn.style.display = '';
       nextBtn.textContent = `Level ${nq.level + 1} → ${nq.sticksRequired + 1} 🪵 + ${nq.wormsRequired + 1} 🪱`;
+      // Win = forward only. No "Try again" — every level is a fresh
+      // procedural world, so replaying the same level is meaningless.
+      retryBtn.style.display = 'none';
     } else {
       breakdown.innerHTML = nq.questComplete
         ? 'You had everything but didn\'t reach the nest in time.'
         : `You collected ${nq.sticks} stick${nq.sticks === 1 ? '' : 's'} and ${nq.worms} worm${nq.worms === 1 ? '' : 's'}.`;
       nextBtn.style.display = 'none';
+      retryBtn.style.display = '';
     }
     this._modal.classList.add('visible');
+  }
+
+  /** Brief "+30s" flash next to the timer chip on a ring pickup. */
+  flashTimerRecharge(seconds) {
+    const chip = document.getElementById('nq-timer-chip');
+    if (!chip) return;
+    chip.classList.remove('pulse');
+    void chip.offsetWidth;
+    chip.classList.add('pulse');
+    const flash = document.createElement('div');
+    flash.className = 'nq-recharge-flash';
+    flash.textContent = `+${seconds}s`;
+    chip.appendChild(flash);
+    setTimeout(() => flash.remove(), 1100);
   }
 
   _hideModal() {

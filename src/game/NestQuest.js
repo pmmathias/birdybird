@@ -35,7 +35,9 @@ export class NestQuest {
     this.won = false;                      // returned to nest after complete
     this.gameOver = false;                 // timer ran out or win
     this.finalScore = 0;
-    this.totalScore = 0;                   // accumulates across levels in a run
+    // accumulates across levels in a run; restorable across the
+    // level→reload boundary via `startTotalScore` option
+    this.totalScore = options.startTotalScore || 0;
     this.highscore = parseInt(localStorage.getItem(HIGHSCORE_KEY), 10) || 0;
 
     this._started = false;
@@ -126,9 +128,13 @@ export class NestQuest {
     }
   }
 
-  /** External hook: Ring Rush collects a ring → counts as side-score. */
+  /** External hook: a side-ring was collected → recharge the timer
+   *  by 30 s instead of awarding side-score points. The recharge IS
+   *  the reward; double-counting (time + score) was unbalanced. */
   registerRingPickup() {
     this.rings++;
+    this.timer += 30;
+    if (this.onRingRecharge) this.onRingRecharge(30);
   }
 
   update(dt) {
@@ -233,7 +239,10 @@ export class NestQuest {
   _onWin() {
     this.won = true;
     const remaining = Math.ceil(this.timer);
-    const levelScore = remaining + this.rings * 10 + this.level * 50;
+    // Rings no longer add side-score — they recharge the timer (+30 s
+     // per pickup), and remaining time IS the score. So the formula is:
+     // remaining time + per-level base bonus, no separate ring multiplier.
+    const levelScore = remaining + this.level * 50;
     this.finalScore = levelScore;
     this.totalScore += levelScore;
     if (this.totalScore > this.highscore) {

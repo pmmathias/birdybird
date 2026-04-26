@@ -65,6 +65,20 @@ controls.dampingFactor = 0.1;
 // for everyone using that seed). Useful for debugging ("look at ?seed=42 and
 // tell me what you see") and for sharing a specific scenic spot. Without the
 // param, worlds are random per browser and cached in localStorage.
+/**
+ * Reload the page with a fresh procedural seed and an updated `level`
+ * URL param. Used by Nest Quest's level-transition flow so each level
+ * is a genuinely new world rather than a re-skin of the same terrain.
+ * Preserves all other URL params (renderer, ocean, etc.).
+ */
+function _reloadWithNewSeed({ level }) {
+  const next = new URLSearchParams(location.search);
+  next.set('seed', String(Math.floor(Math.random() * 1e9)));
+  next.set('level', String(level));
+  next.set('game', 'nest');
+  location.href = `${location.pathname}?${next.toString()}`;
+}
+
 const seedParam = new URLSearchParams(location.search).get('seed');
 let restoreRandom = null;
 if (seedParam !== null) {
@@ -228,11 +242,30 @@ if (gameMode === 'ringrush') {
   // Nest Quest: find a stick + a worm, return to the nest. Rings on the side.
   const nqOptions = {};
   if (urlParams.has('level')) nqOptions.startLevel = parseInt(urlParams.get('level'), 10) || 1;
+  // Restore accumulated run-score across the level→reload boundary.
+  // Cleared by NestQuest.restart(); also implicitly cleared on level 1
+  // since startLevel defaults to 1 with no saved score.
+  const runScoreSaved = parseInt(localStorage.getItem('birdybird.nestquest.runScore'), 10);
+  if (Number.isFinite(runScoreSaved) && nqOptions.startLevel > 1) {
+    nqOptions.startTotalScore = runScoreSaved;
+  }
   nestQuest = new NestQuest(scene, world, flightState, nqOptions);
   nestQuestUI = new NestQuestUI(
     nestQuest,
-    () => nestQuest.restart(),
-    () => nestQuest.nextLevel(),
+    () => {
+      // Restart from level 1: clear saved run state and reload with a
+      // fresh seed so the new run gets a brand-new world, not the same
+      // one the player just lost on.
+      localStorage.removeItem('birdybird.nestquest.runScore');
+      _reloadWithNewSeed({ level: 1 });
+    },
+    () => {
+      // "Next level →" — persist totalScore, reload with new seed +
+      // bumped level. Option A: full reload with new ?seed= so the
+      // procedural world is genuinely fresh each level.
+      localStorage.setItem('birdybird.nestquest.runScore', String(nestQuest.totalScore));
+      _reloadWithNewSeed({ level: nestQuest.level + 1 });
+    },
   );
   nestQuest.onStickCollected = () => { if (flock) flock.triggerVisit(); sfx.stickPickup(); };
   nestQuest.onWormCollected = () => { if (flock) flock.triggerVisit(); sfx.wormPickup(); };
@@ -248,6 +281,7 @@ if (gameMode === 'ringrush') {
     if (biome.forest && world.regenerateForest) world.regenerateForest(biome.forest);
     if (navigator.vibrate) navigator.vibrate([40, 80, 40]);
   };
+  nestQuest.onRingRecharge = (sec) => nestQuestUI.flashTimerRecharge(sec);
   window.__nestQuest = nestQuest;
 
   // If entering via ?level=N URL, apply the matching biome immediately

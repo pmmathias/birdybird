@@ -311,6 +311,7 @@
       background: rgba(10, 22, 40, 0.85);
       color: #ffe088; font-size: 15px;
       padding: 6px 12px;
+      position: relative;  /* anchor for +30s recharge flash */
     }
     #nq-hud .nq-chip-time.warn {
       color: #ff7766;
@@ -341,6 +342,22 @@
       max-width: 90vw; text-align: center;
     }
     #nq-hud .nq-hint.urgent { color: #ffdd44; font-weight: 700; }
+    /* "+30s" recharge feedback when a ring is picked up */
+    .nq-recharge-flash {
+      position: absolute;
+      top: -22px; left: 50%;
+      transform: translateX(-50%);
+      color: #44ff88; font-size: 16px; font-weight: 800;
+      letter-spacing: 0.5px;
+      text-shadow: 0 0 8px rgba(68, 255, 136, 0.6);
+      pointer-events: none;
+      animation: nq-recharge 1.0s ease-out forwards;
+    }
+    @keyframes nq-recharge {
+      0%   { opacity: 0; transform: translate(-50%, 4px); }
+      20%  { opacity: 1; transform: translate(-50%, -2px); }
+      100% { opacity: 0; transform: translate(-50%, -22px); }
+    }
     /* On narrow screens, hide the helper sentence — chips are self-explanatory */
     @media (max-width: 520px) {
       #nq-hud .nq-hint { display: none; }
