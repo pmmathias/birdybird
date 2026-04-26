@@ -143,14 +143,23 @@ export class MobileInput {
     const normPitch = clamp(pitchDeg / this._profile.pitchRange, -1, 1);
     const normRoll = clamp(rollDeg / this._profile.rollRange, -1, 1);
 
-    // Small dead zone (5%) then linear response — fully proportional, no curve
-    const deadZone = 0.05;
-    const applyDeadZone = (v) => {
+    // Dead zone + non-linear response curve (T021 + T023):
+    // - Wider dead zone (10%) so a phone held loosely doesn't drift the bird.
+    // - Quadratic curve so micro-tilts feel calm, large tilts retain
+    //   full authority. Formula: shape(v) = sign(v) · ((|v|−dz)/(1−dz))²
+    //   for |v| ≥ dz, else 0. Phil's feedback ("less sensitive at small
+    //   angles, more at large") with the curve replacing his suggested
+    //   2.5 exponent — quadratic feels more responsive.
+    const DEAD_ZONE = 0.10;
+    const CURVE_EXPONENT = 2.0;
+    const shape = (v) => {
       const abs = Math.abs(v);
-      return abs < deadZone ? 0 : Math.sign(v) * ((abs - deadZone) / (1 - deadZone));
+      if (abs < DEAD_ZONE) return 0;
+      const linear = (abs - DEAD_ZONE) / (1 - DEAD_ZONE);
+      return Math.sign(v) * Math.pow(linear, CURVE_EXPONENT);
     };
-    const rawPitch = applyDeadZone(normPitch) * 0.8;
-    const rawRoll = applyDeadZone(normRoll) * 0.8;
+    const rawPitch = shape(normPitch);
+    const rawRoll = shape(normRoll);
 
     // Responsive smoothing
     this._smoothPitch += (rawPitch - this._smoothPitch) * 0.15;

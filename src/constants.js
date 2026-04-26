@@ -64,7 +64,9 @@ export const MIN_FLIGHT_SPEED = 4;
 export const BANK_RATE = 2.0;
 export const PITCH_RATE = 2.5;
 export const ROLL_RATE = 3.5;
-export const MAX_ROLL = 1.0;             // ~57° max bank
+export const MAX_ROLL = 0.85;            // ~49° max bank — Phil feedback (T022):
+                                         // 57° was "completely sideways". Real birds
+                                         // bank 30-45° in cruise, 60° aggressive.
 export const MAX_PITCH = 0.7;            // ~40° max pitch
 
 // Flight modes
