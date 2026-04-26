@@ -33,29 +33,45 @@ export class CalibrationWizard {
   }
 
   /**
-   * Run the full calibration wizard.
+   * Run the full calibration wizard. Loops on user request from the
+   * test-fly verification step so a mis-calibrated mapping can be
+   * redone without leaving the wizard.
    * @returns {Promise<object>} calibration profile
    */
   async run() {
-    this._createOverlay();
-    const data = {};
+    while (true) {
+      this._createOverlay();
+      const data = {};
 
-    const steps = getSteps();
-    for (let i = 0; i < steps.length; i++) {
-      const step = steps[i];
-      if (step.id === 'shake') {
-        data.shake = await this._runShakeStep(step, i);
-      } else {
-        data[step.id] = await this._runTiltStep(step, i);
+      const tiltSteps = getSteps().filter((s) => s.id !== 'shake');
+      for (let i = 0; i < tiltSteps.length; i++) {
+        data[tiltSteps[i].id] = await this._runTiltStep(tiltSteps[i], i, data.rest);
       }
+
+      const provisionalProfile = this._computeProfile({
+        ...data,
+        shake: { threshold: 12 },  // placeholder; real one captured next
+      });
+
+      // Test-fly verification — user confirms the mapping is correct
+      // before we commit. If they hit redo, restart the whole wizard.
+      const ok = await this._runTestFlyStep(provisionalProfile, tiltSteps.length);
+      if (!ok) {
+        this._removeOverlay();
+        continue;
+      }
+
+      // Capture shake threshold last so test-fly fits the natural flow
+      const shakeStep = getSteps().find((s) => s.id === 'shake');
+      const shake = await this._runShakeStep(shakeStep, tiltSteps.length + 1);
+
+      const profile = this._computeProfile({ ...data, shake });
+      localStorage.setItem('vogel_calibration', JSON.stringify(profile));
+
+      await this._showDone();
+      this._removeOverlay();
+      return profile;
     }
-
-    const profile = this._computeProfile(data);
-    localStorage.setItem('vogel_calibration', JSON.stringify(profile));
-
-    await this._showDone();
-    this._removeOverlay();
-    return profile;
   }
 
   // --- UI ---
@@ -79,19 +95,22 @@ export class CalibrationWizard {
     this._overlay = null;
   }
 
-  _renderStep(step, stepIndex) {
+  _renderStep(step, stepIndex, opts = {}) {
+    const showLive = opts.showLive !== false;
+    const totalSteps = getSteps().length + 1; // +1 for test-fly
     this._overlay.innerHTML = `
       <div style="color:#556677; font-size:12px; margin-bottom:20px; letter-spacing:1px;">
-        ${t('calib.step')} ${stepIndex + 1} / ${getSteps().length}
+        ${t('calib.step')} ${stepIndex + 1} / ${totalSteps}
       </div>
       <div style="font-size:56px; margin-bottom:16px;">${step.icon}</div>
       <h2 style="font-size:22px; font-weight:bold; margin-bottom:8px;
         color:#60c0ff;">${step.title}</h2>
       <p style="color:#88aacc; font-size:15px; line-height:1.6;
-        white-space:pre-line; margin-bottom:28px;">${step.text}</p>
+        white-space:pre-line; margin-bottom:20px;">${step.text}</p>
+      ${showLive ? this._liveSensorMarkup() : ''}
       <div id="calib-progress" style="
         width:180px; height:5px; background:rgba(255,255,255,0.1);
-        border-radius:3px; overflow:hidden;">
+        border-radius:3px; overflow:hidden; margin-top:8px;">
         <div id="calib-bar" style="
           width:0%; height:100%;
           background:linear-gradient(90deg, #40a0ff, #60c0ff);
@@ -101,29 +120,94 @@ export class CalibrationWizard {
     `;
   }
 
+  /** Live sensor visualization: a 2D dot in a labeled square showing
+   *  current tilt relative to rest. Lets the user immediately see what
+   *  the wizard is measuring and verify their phone reports data. */
+  _liveSensorMarkup() {
+    return `
+      <div style="display:flex; flex-direction:column; align-items:center;
+        gap:6px; margin-bottom:8px;">
+        <div style="position:relative; width:140px; height:140px;
+          border:1px solid rgba(96,192,255,0.3); border-radius:14px;
+          background:rgba(10,22,40,0.5);">
+          <div style="position:absolute; top:50%; left:50%; width:1px;
+            height:100%; background:rgba(255,255,255,0.06);
+            transform:translateX(-50%);"></div>
+          <div style="position:absolute; top:50%; left:50%; height:1px;
+            width:100%; background:rgba(255,255,255,0.06);
+            transform:translateY(-50%);"></div>
+          <div style="position:absolute; top:6px; left:50%;
+            transform:translateX(-50%); color:#88aacc; font-size:10px;
+            letter-spacing:0.5px;">↑ β+</div>
+          <div style="position:absolute; bottom:6px; left:50%;
+            transform:translateX(-50%); color:#88aacc; font-size:10px;
+            letter-spacing:0.5px;">β− ↓</div>
+          <div style="position:absolute; left:6px; top:50%;
+            transform:translateY(-50%); color:#88aacc; font-size:10px;">γ−</div>
+          <div style="position:absolute; right:6px; top:50%;
+            transform:translateY(-50%); color:#88aacc; font-size:10px;">γ+</div>
+          <div id="calib-dot" style="position:absolute; top:50%; left:50%;
+            width:14px; height:14px; border-radius:50%;
+            background:radial-gradient(circle, #60c0ff, #2080cc);
+            box-shadow:0 0 12px rgba(96,192,255,0.7);
+            transform:translate(-50%,-50%);
+            transition:transform 0.05s linear;"></div>
+        </div>
+        <div id="calib-readout" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+          font-size:11px; color:#88aacc; min-height:14px;
+          letter-spacing:0.5px;">${t('calib.live.waiting')}</div>
+      </div>
+    `;
+  }
+
   // --- Tilt step ---
 
-  async _runTiltStep(step, stepIndex) {
+  async _runTiltStep(step, stepIndex, restRef) {
     this._renderStep(step, stepIndex);
 
     // Brief pause so user can read and get into position
     await this._delay(1000);
 
     const samples = [];
+    let latest = null;
     const handler = (e) => {
       if (e.beta !== null && e.gamma !== null) {
-        samples.push({ beta: e.beta, gamma: e.gamma });
+        latest = { beta: e.beta, gamma: e.gamma };
+        samples.push(latest);
       }
     };
     window.addEventListener('deviceorientation', handler, true);
 
-    // Animate progress bar
+    // Animate progress bar + drive the live-sensor dot. The dot maps
+    // delta-from-rest if rest is known (steps after rest); for the rest
+    // step itself, it shows raw values centred at 0.
     const bar = document.getElementById('calib-bar');
+    const dot = document.getElementById('calib-dot');
+    const readout = document.getElementById('calib-readout');
+    const DOT_SCALE = 3.0;     // px per ° of tilt — soft-saturates around ±20°
+    const DOT_LIMIT = 60;      // px box half-width for clamping
     const start = performance.now();
     await new Promise((resolve) => {
       const tick = () => {
         const progress = Math.min((performance.now() - start) / STEP_DURATION, 1);
         if (bar) bar.style.width = `${progress * 100}%`;
+        if (latest && dot && readout) {
+          let dBeta, dGamma;
+          if (restRef && step.id !== 'rest') {
+            dBeta = latest.beta - restRef.avgBeta;
+            dGamma = latest.gamma - restRef.avgGamma;
+          } else {
+            dBeta = latest.beta;
+            dGamma = latest.gamma;
+          }
+          const dx = Math.max(-DOT_LIMIT, Math.min(DOT_LIMIT, dGamma * DOT_SCALE));
+          const dy = Math.max(-DOT_LIMIT, Math.min(DOT_LIMIT, -dBeta * DOT_SCALE));
+          dot.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+          const label = (restRef && step.id !== 'rest')
+            ? t('calib.live.delta')
+            : t('calib.live.label');
+          readout.textContent = `${label}  β ${dBeta.toFixed(1)}°  γ ${dGamma.toFixed(1)}°`;
+        }
         if (progress < 1) requestAnimationFrame(tick);
         else resolve();
       };
@@ -147,10 +231,106 @@ export class CalibrationWizard {
     };
   }
 
+  // --- Test-fly verification step ---
+
+  /**
+   * Final sanity check before saving. A live preview-bird banks/pitches
+   * with the user's tilt using the just-computed profile. User confirms
+   * the mapping matches their expectation, or hits "redo" to start over.
+   * @returns {Promise<boolean>} true = confirmed, false = redo
+   */
+  async _runTestFlyStep(profile, stepIndex) {
+    const totalSteps = getSteps().length + 1;
+    this._overlay.innerHTML = `
+      <div style="color:#556677; font-size:12px; margin-bottom:20px; letter-spacing:1px;">
+        ${t('calib.step')} ${stepIndex + 1} / ${totalSteps}
+      </div>
+      <div style="font-size:56px; margin-bottom:14px;">🦅</div>
+      <h2 style="font-size:22px; font-weight:bold; margin-bottom:8px;
+        color:#60c0ff;">${t('calib.test.title')}</h2>
+      <p style="color:#88aacc; font-size:15px; line-height:1.6;
+        white-space:pre-line; margin-bottom:18px;">${t('calib.test.text')}</p>
+      <div id="calib-bird-stage" style="position:relative; width:170px;
+        height:170px; margin-bottom:24px;
+        background:radial-gradient(ellipse at 50% 60%, rgba(96,192,255,0.08), transparent 70%);">
+        <svg id="calib-bird" viewBox="-50 -30 100 60" width="170" height="100"
+          style="position:absolute; left:0; top:35px;
+            transition:transform 0.08s linear;">
+          <path d="M -40 0 Q -22 -16 0 -3 Q 22 -16 40 0 Q 22 6 0 6 Q -22 6 -40 0 Z"
+            fill="#60c0ff" stroke="#a0d8ff" stroke-width="1"/>
+          <circle cx="0" cy="0" r="5" fill="#a0d8ff"/>
+          <path d="M 4 -1 L 12 -2 L 4 1 Z" fill="#ffd060"/>
+        </svg>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+        <button id="calib-confirm" style="
+          padding:11px 22px; font-size:14px; font-weight:600;
+          background:linear-gradient(135deg, #44dd88, #22aa66); color:#03210f;
+          border:none; border-radius:8px; cursor:pointer;
+          box-shadow:0 4px 14px rgba(68,221,136,0.3);">
+          ${t('calib.test.confirm')}
+        </button>
+        <button id="calib-redo" style="
+          padding:11px 22px; font-size:14px;
+          background:rgba(255,255,255,0.08); color:#ccddff;
+          border:1px solid rgba(255,255,255,0.15); border-radius:8px;
+          cursor:pointer;">
+          ${t('calib.test.redo')}
+        </button>
+      </div>
+    `;
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener('deviceorientation', handler, true);
+        cancelAnimationFrame(rafId);
+        resolve(ok);
+      };
+
+      const bird = document.getElementById('calib-bird');
+      let latest = null;
+      const handler = (e) => {
+        if (e.beta !== null && e.gamma !== null) {
+          latest = { beta: e.beta, gamma: e.gamma };
+        }
+      };
+      window.addEventListener('deviceorientation', handler, true);
+
+      // Drive bird transform from the LIVE input through the same profile
+      // mapping the game uses, so what the user sees here matches in-game.
+      let rafId = 0;
+      const tick = () => {
+        if (latest && bird) {
+          const dBeta = latest.beta - profile.restBeta;
+          const dGamma = latest.gamma - profile.restGamma;
+          const rollRaw = profile.rollAxis === 'beta' ? dBeta : dGamma;
+          const pitchRaw = profile.pitchAxis === 'beta' ? dBeta : dGamma;
+          const rollNorm = Math.max(-1, Math.min(1,
+            (rollRaw * profile.rollSign) / profile.rollRange));
+          const pitchNorm = Math.max(-1, Math.min(1,
+            (pitchRaw * profile.pitchSign) / profile.pitchRange));
+          const bankDeg = rollNorm * 45;     // visual cap ±45°
+          const pitchDeg = -pitchNorm * 25;  // climb = nose up = negative rotation
+          bird.style.transform = `rotate(${bankDeg}deg) translateY(${pitchNorm * -20}px)`;
+        }
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+
+      document.getElementById('calib-confirm').addEventListener('click',
+        () => finish(true));
+      document.getElementById('calib-redo').addEventListener('click',
+        () => finish(false));
+    });
+  }
+
   // --- Shake step ---
 
   async _runShakeStep(step, stepIndex) {
-    this._renderStep(step, stepIndex);
+    this._renderStep(step, stepIndex, { showLive: false });
     const bar = document.getElementById('calib-bar');
     if (bar) {
       bar.style.width = '100%';
