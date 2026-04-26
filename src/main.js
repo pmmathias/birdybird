@@ -308,7 +308,7 @@ if (gameMode === 'ringrush') {
     if (flock) flock.triggerVisit();
     sfx.ringDing();
   };
-  nestQuest.onSpeedBoost = (sec) => nestQuestUI.flashSpeedBoost(sec);
+  nestQuest.onSpeedBoost = (sec, mult) => nestQuestUI.flashSpeedBoost(sec, mult);
   window.__pickupSpawner = pickupSpawner;
   ringRush = pickupSpawner; // reuse the update-loop slot (only needs .update(dt))
 

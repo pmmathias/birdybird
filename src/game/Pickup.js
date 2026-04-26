@@ -19,18 +19,44 @@ const CLOCK_HAND_MAT = new THREE.MeshBasicMaterial({
   color: 0x222222, toneMapped: false,
 });
 const SPEED_MAT = new THREE.MeshBasicMaterial({
-  color: 0x60d4ff, transparent: true, opacity: 0.95, toneMapped: false,
+  color: 0x60d4ff, transparent: true, opacity: 0.95,
+  toneMapped: false, side: THREE.DoubleSide,
 });
 const SPEED_TIP_MAT = new THREE.MeshBasicMaterial({
-  color: 0xffffff, transparent: true, opacity: 0.85, toneMapped: false,
+  color: 0xffffff, transparent: true, opacity: 0.95,
+  toneMapped: false, side: THREE.DoubleSide,
 });
 
-const CLOCK_FACE_GEO = new THREE.CylinderGeometry(4.5, 4.5, 0.6, 24);
-const CLOCK_RIM_GEO = new THREE.TorusGeometry(4.5, 0.5, 10, 24);
-const CLOCK_HAND_LONG_GEO = new THREE.BoxGeometry(0.3, 0.2, 3.6);
-const CLOCK_HAND_SHORT_GEO = new THREE.BoxGeometry(0.3, 0.2, 2.4);
+// Clock parts — all aligned to lie in the XY plane (face along +Z).
+// Disc: CylinderGeometry's natural axis is +Y, so rotateX(π/2) lays the
+// flat face along world XY with normal +Z. Rim: TorusGeometry's natural
+// plane is XY already → no rotation needed (matches disc).
+const CLOCK_FACE_GEO = new THREE.CylinderGeometry(4.5, 4.5, 0.6, 28).rotateX(Math.PI / 2);
+const CLOCK_RIM_GEO = new THREE.TorusGeometry(4.5, 0.4, 10, 28);
+// Hands lie in the disc plane — extent along Y for the minute hand,
+// along X for the hour hand. Thin Z so they stick just out of the face.
+const CLOCK_HAND_LONG_GEO = new THREE.BoxGeometry(0.35, 3.6, 0.2);
+const CLOCK_HAND_SHORT_GEO = new THREE.BoxGeometry(2.4, 0.35, 0.2);
 
-const CHEVRON_GEO = new THREE.ConeGeometry(2.5, 4.5, 4);
+// Chevron arrow geometry — flat 5-vertex swoosh (V-shape with body) in
+// the XZ plane, tip pointing +Z. DoubleSide material so it's visible
+// from above and below as it rotates.
+const CHEVRON_GEO = (() => {
+  const g = new THREE.BufferGeometry();
+  const vertices = new Float32Array([
+     0,    0,  2.5,    // 0 tip
+    -1.7,  0, -1.0,    // 1 left outer
+    -0.5,  0, -0.2,    // 2 left inner
+     0.5,  0, -0.2,    // 3 right inner
+     1.7,  0, -1.0,    // 4 right outer
+  ]);
+  // Two triangles forming the chevron body
+  const indices = [0, 2, 1,  0, 4, 3];
+  g.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+  g.setIndex(indices);
+  g.computeVertexNormals();
+  return g;
+})();
 
 export class Pickup {
   /**
@@ -54,37 +80,36 @@ export class Pickup {
   }
 
   _buildClock() {
-    const face = new THREE.Mesh(CLOCK_FACE_GEO, CLOCK_FACE_MAT);
-    face.rotation.x = Math.PI / 2;  // disc faces forward like a wall clock
-    this.mesh.add(face);
+    // All parts already pre-oriented in the geometry (face in XY plane,
+    // normal +Z). The whole group rotates around Y so it's visible from
+    // any angle as the bird approaches.
+    this.mesh.add(new THREE.Mesh(CLOCK_FACE_GEO, CLOCK_FACE_MAT));
+    this.mesh.add(new THREE.Mesh(CLOCK_RIM_GEO, CLOCK_RIM_MAT));
 
-    const rim = new THREE.Mesh(CLOCK_RIM_GEO, CLOCK_RIM_MAT);
-    rim.rotation.x = Math.PI / 2;
-    this.mesh.add(rim);
-
-    // Two clock hands forming a "12 o'clock" T
+    // Hands sit just in front of the disc (slightly +Z) so they don't
+    // z-fight with the face.
     const handLong = new THREE.Mesh(CLOCK_HAND_LONG_GEO, CLOCK_HAND_MAT);
-    handLong.position.set(0, 0, -0.4);
+    handLong.position.set(0, 0.8, 0.4);  // pointing up — minute at "12"
     this.mesh.add(handLong);
     const handShort = new THREE.Mesh(CLOCK_HAND_SHORT_GEO, CLOCK_HAND_MAT);
-    handShort.rotation.y = Math.PI / 2;
-    handShort.position.set(0, 0, -0.4);
+    handShort.position.set(0.6, 0, 0.4);  // pointing right — hour at "3"
     this.mesh.add(handShort);
   }
 
   _buildSpeedArrow() {
-    // Three stacked chevrons trailing back from a bright tip — reads
-    // as "speed boost" from any angle.
-    const tip = new THREE.Mesh(CHEVRON_GEO, SPEED_TIP_MAT);
-    tip.rotation.x = -Math.PI / 2;   // chevron points along world -Z
-    tip.scale.setScalar(1.0);
-    tip.position.z = -2;
-    this.mesh.add(tip);
-    for (let i = 0; i < 2; i++) {
-      const chevron = new THREE.Mesh(CHEVRON_GEO, SPEED_MAT);
-      chevron.rotation.x = -Math.PI / 2;
-      chevron.scale.setScalar(0.85 - i * 0.18);
-      chevron.position.z = (i + 1) * 1.6;
+    // Three flat chevrons in a stagger pattern — middle one tallest +
+    // brightest tip, outer two trail behind in dimmer cyan. The whole
+    // group rotates slowly around Y so it's visible from any approach
+    // angle and reads as "speed".
+    const positions = [
+      { y:  0.0, scale: 1.0,  mat: SPEED_TIP_MAT, z:  0 },
+      { y:  0.0, scale: 0.85, mat: SPEED_MAT,    z: -1.4 },
+      { y:  0.0, scale: 0.7,  mat: SPEED_MAT,    z: -2.7 },
+    ];
+    for (const cfg of positions) {
+      const chevron = new THREE.Mesh(CHEVRON_GEO, cfg.mat);
+      chevron.position.set(0, cfg.y, cfg.z);
+      chevron.scale.setScalar(cfg.scale);
       this.mesh.add(chevron);
     }
   }

@@ -35,10 +35,13 @@ export class FlightState {
     this.flapStrengthScale = 1;  // thrust multiplier from input strength
     this.wingSpread = 1.0;   // 0 = wings tucked, 1 = fully spread
 
-    // Speed-boost pickup (T—): seconds remaining of 2× cruise thrust.
-    // FlightPhysics adds a forward acceleration toward a target speed
-    // while this is positive.
+    // Speed-boost pickup. `speedBoostT` is the seconds remaining;
+    // `speedBoostStack` is how many arrows have been picked up while
+    // the boost is active — the multiplier becomes (stack + 1)×, so:
+    //   1 arrow → 2× cruise, 2 arrows → 3×, 3 arrows → 4×, …
+    // capped to 5 in NestQuest. Stack resets when timer expires.
     this.speedBoostT = 0;
+    this.speedBoostStack = 0;
   }
 
   /** Update derived vectors from euler angles */

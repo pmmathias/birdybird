@@ -89,11 +89,12 @@ export class NestQuestUI {
     this._wormsNeedEl.textContent = nq.wormsRequired;
     document.getElementById('nq-level').textContent = nq.level;
 
-    // Speed-boost countdown chip — show only while a boost is active
+    // Speed-boost countdown chip — show multiplier + remaining seconds
     const boostT = nq.flightState?.speedBoostT || 0;
+    const stack = nq.flightState?.speedBoostStack || 0;
     if (boostT > 0) {
       this._boostChipEl.style.display = '';
-      this._boostTimeEl.textContent = Math.ceil(boostT);
+      this._boostTimeEl.textContent = `${stack + 1}× ${Math.ceil(boostT)}s`;
     } else {
       this._boostChipEl.style.display = 'none';
     }
@@ -159,10 +160,13 @@ export class NestQuestUI {
   }
 
   /** Big centred "⚡ SPEED BOOST" pop on speed-arrow pickup. */
-  flashSpeedBoost(seconds) {
+  flashSpeedBoost(seconds, multiplier = 2) {
     const flash = document.createElement('div');
     flash.className = 'nq-boost-flash';
-    flash.innerHTML = `<b>⚡ SPEED BOOST</b><br><span>${seconds}s · 2× speed</span>`;
+    const subtitle = multiplier > 2
+      ? `${seconds}s · ${multiplier}× SPEED!!`
+      : `${seconds}s · ${multiplier}× speed`;
+    flash.innerHTML = `<b>⚡ SPEED BOOST</b><br><span>${subtitle}</span>`;
     document.body.appendChild(flash);
     setTimeout(() => flash.remove(), 1700);
   }

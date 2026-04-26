@@ -135,12 +135,16 @@ export class NestQuest {
     if (this.onRingRecharge) this.onRingRecharge(30);
   }
 
-  /** External hook: a speed-arrow pickup → 30 s of 2× speed boost.
-   *  Stacks (re-applied) by extending speedBoostT, not adding. */
+  /** External hook: a speed-arrow pickup → cumulative speed boost.
+   *  Each arrow adds +1 to the stack (cap 4 → 5× max) and refreshes
+   *  the 30 s timer. So 1 arrow = 2×, 2 arrows = 3×, 3 = 4×, 4+ = 5×. */
   registerSpeedPickup() {
     const BOOST_DURATION = 30;
-    this.flightState.speedBoostT = Math.max(this.flightState.speedBoostT, BOOST_DURATION);
-    if (this.onSpeedBoost) this.onSpeedBoost(BOOST_DURATION);
+    const MAX_STACK = 4;
+    const fs = this.flightState;
+    fs.speedBoostStack = Math.min((fs.speedBoostStack || 0) + 1, MAX_STACK);
+    fs.speedBoostT = BOOST_DURATION;
+    if (this.onSpeedBoost) this.onSpeedBoost(BOOST_DURATION, fs.speedBoostStack + 1);
   }
 
   update(dt) {

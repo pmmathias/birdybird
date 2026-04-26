@@ -249,19 +249,27 @@ export class FlightPhysics {
       s.flapCooldown -= dt;
     }
 
-    // --- 7b. Speed-boost pickup ---
-    // While speedBoostT > 0, push the bird forward toward ~2× cruise.
+    // --- 7b. Speed-boost pickup (cumulative) ---
+    // Multiplier scales with stack: 1 arrow = 2×, 2 arrows = 3×, etc.
     // Acceleration tapers as we approach the target, so peak speed is
-    // bounded but you also feel an instant kick on pickup. Counts down
-    // in real time regardless of whether the bird is flapping.
+    // bounded but you feel an instant kick on every pickup. Stack +
+    // timer reset together when the timer expires.
     if (s.speedBoostT > 0) {
-      const TARGET_BOOST_SPEED = 50;  // m/s, ~2× cruise (cruise ≈ 20-25 m/s)
+      const CRUISE_BASE = 25;
+      const multiplier = 1 + (s.speedBoostStack || 0);
+      const targetSpeed = CRUISE_BASE * multiplier;
       const fwdSpeed = s.velocity.dot(s.forward);
-      if (fwdSpeed < TARGET_BOOST_SPEED) {
-        const accel = 35 * (1 - fwdSpeed / TARGET_BOOST_SPEED);
+      if (fwdSpeed < targetSpeed) {
+        // More aggressive accel at higher stacks so big boosts feel big
+        const accelMag = 30 + multiplier * 10;
+        const accel = accelMag * (1 - fwdSpeed / targetSpeed);
         s.velocity.addScaledVector(s.forward, accel * dt);
       }
-      s.speedBoostT = Math.max(0, s.speedBoostT - dt);
+      s.speedBoostT -= dt;
+      if (s.speedBoostT <= 0) {
+        s.speedBoostT = 0;
+        s.speedBoostStack = 0;
+      }
     }
 
     // --- 8. Auto-trim pitch toward velocity ---
