@@ -67,13 +67,19 @@ export class FlightPhysics {
     const speed = s.velocity.length();
     if (speed < 0.5) return 0;
 
-    const velDir = s.velocity.clone().normalize();
-    const dot = clamp(velDir.dot(s.forward), -1, 1);
-    const rawAoA = Math.acos(dot);
+    // Project velocity onto the bird's pitch plane (forward × up) so a
+    // pure yaw rotation — where velocity lags behind the new forward
+    // for a moment — does NOT produce an artificial AoA spike. Real AoA
+    // is the angle in the pitch plane only; the sideways drift component
+    // belongs to lateral drag, not lift.
+    const velFwd = s.velocity.dot(s.forward);
+    const velUp = s.velocity.dot(s.up);
+    if (Math.hypot(velFwd, velUp) < 0.5) return 0;
 
-    // Sign: positive when pitched up relative to velocity
-    const sign = velDir.dot(s.up) < 0 ? 1 : -1;
-    return sign * rawAoA;
+    // atan2(-velUp, velFwd): velUp < 0 means velocity points below the
+    // bird's up vector → bird's nose is pitched above flight path →
+    // positive AoA → lift.
+    return Math.atan2(-velUp, velFwd);
   }
 
   /**
@@ -154,11 +160,18 @@ export class FlightPhysics {
     }
 
     // --- 4. Baseline lift from wing incidence ---
-    // Wing is mounted at slight angle → always some upward lift proportional to speed²
-    // This acts in world-up direction (not tilted by roll/AoA) to prevent stall death spiral
+    // Wing is mounted at slight angle → always some upward lift
+    // proportional to speed². Tilts with the bird's up vector so a
+    // banked turn loses some vertical lift component (real-airplane
+    // behaviour: turn = altitude bleed unless you pitch up to
+    // compensate). Floored at 0.3 of full vertical so a stalled or
+    // momentarily-inverted bird still gets enough lift to recover —
+    // the "stall death spiral" guard the previous always-world-up
+    // version was buying with too generous side effects.
     const baselineCL = CL_SLOPE * WING_INCIDENCE;
     const baselineLift = dynamicPressure * effectiveWingArea * baselineCL / BIRD_MASS;
-    s.velocity.y += baselineLift * dt;
+    const verticalFactor = Math.max(s.up.y, 0.3);
+    s.velocity.y += baselineLift * verticalFactor * dt;
 
     // --- 5. Drag: parasitic + induced ---
     // Body always has some drag even with tucked wings (min 15% wing area for drag)
