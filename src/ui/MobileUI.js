@@ -266,15 +266,31 @@ export class MobileUI {
     `;
     document.body.appendChild(this._controlsOverlay);
 
-    // Full recalibration button
-    this._controlsOverlay.addEventListener('click', async (e) => {
+    // Full recalibration button (in mobile controls overlay)
+    this._controlsOverlay.addEventListener('click', (e) => {
       if (e.target.id !== 'mobile-recalib-btn') return;
+      this.runRecalibration();
+    });
+
+    // Expose globally so the Options dialog (inline in index.html) can
+    // also trigger a recalibration without us reaching across modules.
+    window.__triggerRecalib = () => this.runRecalibration();
+  }
+
+  /** Pause input, run the wizard, apply the new profile. Safe to call
+   *  from anywhere (mobile controls bar, Options dialog, or future menus). */
+  async runRecalibration() {
+    if (this._recalibInProgress) return;
+    this._recalibInProgress = true;
+    try {
       this._mobileInput.active = false;
       const wizard = new CalibrationWizard();
       const profile = await wizard.run();
       this._mobileInput.setProfile(profile);
       this._mobileInput.active = true;
-    });
+    } finally {
+      this._recalibInProgress = false;
+    }
   }
 
   _createOrientationWarning() {

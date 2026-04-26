@@ -656,6 +656,23 @@
         <label><input type="radio" name="ocean" value="single"><span><b>Single Cascade</b><span class="opt-desc">Phil Crowther's Ocean4 iFFT — fast path, default on mobile.</span></span></label>
       </div>
 
+      <div class="opt-group" id="options-mobile-group" style="display:none;">
+        <h3>Mobile Tilt</h3>
+        <button id="opt-recalib-btn" style="
+          width:100%; padding:12px 16px; font-size:14px; font-weight:600;
+          background:linear-gradient(135deg, #2080cc, #40a0ff); color:white;
+          border:none; border-radius:10px; cursor:pointer;
+          box-shadow:0 4px 14px rgba(32,128,204,0.35);
+          display:flex; align-items:center; justify-content:center; gap:8px;">
+          🔄 Recalibrate tilt
+        </button>
+        <p style="margin-top:8px; font-size:12px; color:rgba(255,255,255,0.55);
+          line-height:1.4;">
+          Replays the calibration wizard. Use this if your tilt feels reversed
+          or unresponsive.
+        </p>
+      </div>
+
       <div id="options-apply-note">
         Changing an option reloads the page with the new setting active.
       </div>
@@ -743,6 +760,18 @@
         || navigator.maxTouchPoints > 1;
       // Default varies by device: desktop WebGPU → cascaded, mobile → single
       const oceanDefault = (isMobile || !hasWebGPU) ? 'single' : 'cascaded';
+
+      // Mobile-only Recalibrate button
+      if (isMobile) {
+        const mobileGroup = document.getElementById('options-mobile-group');
+        if (mobileGroup) mobileGroup.style.display = '';
+        document.getElementById('opt-recalib-btn').addEventListener('click', () => {
+          oov.classList.remove('open');
+          if (typeof window.__triggerRecalib === 'function') {
+            window.__triggerRecalib();
+          }
+        });
+      }
       const oceanVal    = oceanParam === 'single'   ? 'single'
                         : oceanParam === 'cascaded' ? 'cascaded'
                         : oceanDefault;
