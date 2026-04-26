@@ -33,13 +33,17 @@ export class Worm {
 
     this.body = new THREE.Mesh(BODY_GEOM, BODY_MAT);
     this.body.rotation.z = Math.PI / 2; // lay flat on ground
-    this.body.position.y = 0.5;
+    // Lifted so the body sits clearly above terrain (terrain mesh has
+    // some smoothing & visual thickness — at y=0.5 the worm half-sank
+    // into the ground from the chase-cam angle).
+    this.body.position.y = 1.1;
     this.group.add(this.body);
 
-    // Ground halo — helps spotting from above
+    // Ground halo — sits just above ground so it stays visible from
+    // every angle without z-fighting against terrain
     this.halo = new THREE.Mesh(HALO_GEOM, HALO_MAT);
     this.halo.rotation.x = -Math.PI / 2;
-    this.halo.position.y = 0.12;
+    this.halo.position.y = 0.4;
     this.group.add(this.halo);
 
     // Phase offset so worms don't all blink in sync

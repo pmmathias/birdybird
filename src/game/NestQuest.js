@@ -77,53 +77,50 @@ export class NestQuest {
 
   get started() { return this._started; }
 
+  /** Stratified angular sampling — divides 2π into `count` sectors and
+   *  picks one position per sector (with jitter). Guarantees worms +
+   *  trees spread evenly around the player rather than clumping in
+   *  one half of the map. Skips spawn if it lands in water; up to
+   *  6 retries within the same sector before giving up on it. */
+  _stratifiedSpawn(count, minR, maxR, minLandHeight) {
+    const placed = [];
+    const sectorAngle = (Math.PI * 2) / count;
+    for (let i = 0; i < count; i++) {
+      const sectorBase = i * sectorAngle;
+      let pos = null;
+      for (let tries = 0; tries < 6; tries++) {
+        const angle = sectorBase + Math.random() * sectorAngle;
+        const r = minR + Math.random() * (maxR - minR);
+        const x = Math.cos(angle) * r;
+        const z = Math.sin(angle) * r;
+        const groundY = getTerrainHeight(x, z, this.world.arcs);
+        if (groundY < WATER_LEVEL + minLandHeight) continue;
+        pos = new THREE.Vector3(x, groundY, z);
+        break;
+      }
+      if (pos) placed.push(pos);
+    }
+    return placed;
+  }
+
   _spawnStickTrees() {
     this.stickTrees = [];
-    const placed = [];
-    const maxR = WORLD_HALF * 0.6;
-    const minR = 250;
-    const minDist = 120; // min distance between trees to avoid clumping
-
-    let attempts = 0;
-    while (this.stickTrees.length < STICK_TREE_COUNT && attempts < 500) {
-      attempts++;
-      const angle = Math.random() * Math.PI * 2;
-      const r = minR + Math.random() * (maxR - minR);
-      const x = Math.cos(angle) * r;
-      const z = Math.sin(angle) * r;
-
-      // Not over water, not too close to siblings
-      const groundY = getTerrainHeight(x, z, this.world.arcs);
-      if (groundY < WATER_LEVEL + 3) continue;
-      let tooClose = false;
-      for (const p of placed) {
-        if ((p.x - x) ** 2 + (p.z - z) ** 2 < minDist ** 2) { tooClose = true; break; }
-      }
-      if (tooClose) continue;
-
-      const pos = new THREE.Vector3(x, groundY, z);
+    const positions = this._stratifiedSpawn(
+      STICK_TREE_COUNT,
+      250, WORLD_HALF * 0.6, 3,
+    );
+    for (const pos of positions) {
       this.stickTrees.push(new StickTree(this.scene, pos));
-      placed.push({ x, z });
     }
   }
 
   _spawnWorms() {
     this.worms_list = [];
-    const maxR = WORLD_HALF * 0.55;
-    const minR = 180;
-
-    let attempts = 0;
-    while (this.worms_list.length < WORM_COUNT && attempts < 500) {
-      attempts++;
-      const angle = Math.random() * Math.PI * 2;
-      const r = minR + Math.random() * (maxR - minR);
-      const x = Math.cos(angle) * r;
-      const z = Math.sin(angle) * r;
-
-      const groundY = getTerrainHeight(x, z, this.world.arcs);
-      if (groundY < WATER_LEVEL + 1) continue; // no worms in water
-
-      const pos = new THREE.Vector3(x, groundY, z);
+    const positions = this._stratifiedSpawn(
+      WORM_COUNT,
+      180, WORLD_HALF * 0.55, 1,
+    );
+    for (const pos of positions) {
       this.worms_list.push(new Worm(this.scene, pos));
     }
   }
