@@ -11,12 +11,11 @@ import { WATER_LEVEL } from '../constants.js';
  * batch when fully cleared.
  */
 
-const PICKUP_COUNT  = 14;     // sparser than RING_COUNT (~25)
+const PICKUP_COUNT   = 14;    // sparser than RING_COUNT (~25); even count → 7+7
 const COLLECT_RADIUS = 8;
 const SPAWN_RADIUS   = 800;
 const MIN_HEIGHT     = 18;
 const MAX_HEIGHT     = 95;
-const CLOCK_RATIO    = 0.55;  // ~55% clocks, 45% speed arrows
 
 export class PickupSpawner {
   constructor(scene, world, flightState) {
@@ -35,6 +34,19 @@ export class PickupSpawner {
   }
 
   _spawn() {
+    // Build a balanced type list (half clocks, half speed arrows) and
+    // Fisher-Yates shuffle it so the first few rings the player flies
+    // past are still random — but the global count stays exactly 1:1.
+    const halfCount = Math.floor(PICKUP_COUNT / 2);
+    const types = [
+      ...Array(halfCount).fill('clock'),
+      ...Array(PICKUP_COUNT - halfCount).fill('speed'),
+    ];
+    for (let i = types.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [types[i], types[j]] = [types[j], types[i]];
+    }
+
     const origin = this.flightState.position.clone();
     for (let i = 0; i < PICKUP_COUNT; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -45,8 +57,7 @@ export class PickupSpawner {
       const floor = Math.max(terrainY, WATER_LEVEL);
       const y = floor + MIN_HEIGHT + Math.random() * (MAX_HEIGHT - MIN_HEIGHT);
 
-      const type = Math.random() < CLOCK_RATIO ? 'clock' : 'speed';
-      const p = new Pickup(type, new THREE.Vector3(x, y, z));
+      const p = new Pickup(types[i], new THREE.Vector3(x, y, z));
       this.scene.add(p.mesh);
       this.pickups.push(p);
     }
