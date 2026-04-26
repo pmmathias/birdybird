@@ -18,23 +18,30 @@ function makeMat(color, opts = {}) {
   return new THREE.MeshLambertMaterial({ color, ...opts });
 }
 
-function createHotelBuilding(group, x, y, z, width, depth, floors) {
+// Per-resort palettes — wall + roof + accent sign colour. Picked once per
+// resort so all its buildings share a coherent style.
+const PALETTES = [
+  { wall: 0xf0ead8, roof: 0xcc8855, sign: 0x1155aa, rotation: 'sandy' },     // sand + brick
+  { wall: 0xfaf6f0, roof: 0x336699, sign: 0xff6622, rotation: 'greek' },     // white + santorini blue
+  { wall: 0xe8d4a8, roof: 0x884422, sign: 0x44aa44, rotation: 'spanish' },   // tan + tile red
+  { wall: 0xffeedd, roof: 0xaa5533, sign: 0x88bb44, rotation: 'pink' },      // pink + terra cotta
+  { wall: 0xddccaa, roof: 0x553322, sign: 0xff8844, rotation: 'colonial' },  // dune + dark wood
+];
+
+function createHotelBuilding(group, x, y, z, width, depth, floors, palette) {
   const floorH = 4;
   const totalH = floors * floorH;
 
-  // Main building
-  const wallMat = makeMat(0xf0ead8);
+  const wallMat = makeMat(palette.wall);
   const bld = makeBox(width, totalH, depth, wallMat);
   bld.position.set(x, y + totalH / 2, z);
   group.add(bld);
 
-  // Roof
-  const roofMat = makeMat(0xcc8855);
+  const roofMat = makeMat(palette.roof);
   const roof = makeBox(width + 1, 0.5, depth + 1, roofMat);
   roof.position.set(x, y + totalH + 0.25, z);
   group.add(roof);
 
-  // Windows (single stripe per facade instead of per-floor)
   const winMat = makeMat(0x4477aa);
   const winFront = makeBox(width * 0.85, totalH * 0.8, 0.2, winMat);
   winFront.position.set(x, y + totalH * 0.45, z - depth / 2 - 0.1);
@@ -43,10 +50,77 @@ function createHotelBuilding(group, x, y, z, width, depth, floors) {
   winBack.position.set(x, y + totalH * 0.45, z + depth / 2 + 0.1);
   group.add(winBack);
 
-  // Sign
-  const signMat = makeMat(0x1155aa, { emissive: 0x1155aa, emissiveIntensity: 0.3 });
+  const signMat = makeMat(palette.sign, { emissive: palette.sign, emissiveIntensity: 0.3 });
   const sign = makeBox(width * 0.6, 2, 0.3, signMat);
   sign.position.set(x, y + totalH + 2, z - depth / 2 - 0.5);
+  group.add(sign);
+}
+
+/** Cylindrical tower hotel with conical roof. */
+function createTowerHotel(group, x, y, z, radius, height, palette) {
+  const wallMat = makeMat(palette.wall);
+  const tower = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius * 1.05, height, 14),
+    wallMat,
+  );
+  tower.position.set(x, y + height / 2, z);
+  group.add(tower);
+
+  // Conical roof
+  const roofMat = makeMat(palette.roof);
+  const roofH = Math.max(3, radius * 0.7);
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(radius * 1.1, roofH, 14),
+    roofMat,
+  );
+  roof.position.set(x, y + height + roofH / 2, z);
+  group.add(roof);
+
+  // Two horizontal window bands
+  const winMat = makeMat(0x4477aa);
+  for (const t of [0.35, 0.7]) {
+    const band = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius + 0.08, radius + 0.08, height * 0.12, 14),
+      winMat,
+    );
+    band.position.set(x, y + height * t, z);
+    group.add(band);
+  }
+
+  // Top sign / antenna
+  const signMat = makeMat(palette.sign, { emissive: palette.sign, emissiveIntensity: 0.3 });
+  const antenna = makeBox(0.4, 4, 0.4, signMat);
+  antenna.position.set(x, y + height + roofH + 2, z);
+  group.add(antenna);
+}
+
+/** Stepped/terraced hotel — each level smaller than the one below
+ *  (Mediterranean / Mexican resort look). */
+function createTerracedHotel(group, x, y, z, baseW, baseD, levels, palette) {
+  const wallMat = makeMat(palette.wall);
+  const roofMat = makeMat(palette.roof);
+  const floorH = 3.5;
+
+  for (let i = 0; i < levels; i++) {
+    const shrink = 1 - i * 0.18;
+    const w = baseW * shrink;
+    const d = baseD * shrink;
+    // Stagger the level toward the back so the front is a stepped face
+    const zOffset = (i * baseD * 0.1);
+    const yBase = y + i * floorH;
+    const box = makeBox(w, floorH, d, wallMat);
+    box.position.set(x, yBase + floorH / 2, z + zOffset);
+    group.add(box);
+    // Each step gets a thin roof slab so the silhouette is crisp
+    const roofSlab = makeBox(w + 0.4, 0.25, d + 0.4, roofMat);
+    roofSlab.position.set(x, yBase + floorH + 0.125, z + zOffset);
+    group.add(roofSlab);
+  }
+
+  // Sign on the front (lowest, widest level)
+  const signMat = makeMat(palette.sign, { emissive: palette.sign, emissiveIntensity: 0.3 });
+  const sign = makeBox(baseW * 0.5, 1.6, 0.3, signMat);
+  sign.position.set(x, y + floorH + 1, z - baseD / 2 - 0.2);
   group.add(sign);
 }
 
@@ -71,22 +145,6 @@ function createPool(group, x, y, z, w, d) {
   edges[2].position.set(x - w / 2 - edgeW / 2, y + 0.15, z);
   edges[3].position.set(x + w / 2 + edgeW / 2, y + 0.15, z);
   edges.forEach(e => group.add(e));
-}
-
-function createWaterSlide(group, x, y, z, height, color) {
-  // Tower
-  const towerMat = makeMat(0xdddddd);
-  const tower = makeBox(3, height, 3, towerMat);
-  tower.position.set(x, y + height / 2, z);
-  group.add(tower);
-
-  // Slide tube (curved cylinder approximation)
-  const slideMat = makeMat(color);
-  const slideGeo = new THREE.CylinderGeometry(0.8, 0.8, height * 1.3, 8);
-  slideGeo.rotateZ(0.4); // tilt
-  const slide = new THREE.Mesh(slideGeo, slideMat);
-  slide.position.set(x + 3, y + height * 0.5, z);
-  group.add(slide);
 }
 
 // Curved, tapered frond built from a plane: wide at base, pointy at tip,
@@ -223,41 +281,65 @@ function createPalmTree(group, x, y, z, height = 8) {
  * Create a full hotel resort complex.
  * @returns {THREE.Group}
  */
+const RESORT_STYLES = ['classic', 'lshape', 'tower', 'terraced'];
+
 function createResort(groundY) {
   const g = new THREE.Group();
   const y = groundY;
+  const palette = PALETTES[Math.floor(Math.random() * PALETTES.length)];
+  const style = RESORT_STYLES[Math.floor(Math.random() * RESORT_STYLES.length)];
 
-  // Main hotel (8 floors — tall and visible from air)
-  createHotelBuilding(g, 0, y, -15, 80, 25, 8);
+  switch (style) {
+    case 'classic':
+      // Three rectangular boxes — the original silhouette.
+      createHotelBuilding(g, 0, y, -15, 80, 25, 8, palette);
+      createHotelBuilding(g, 55, y, -15, 40, 18, 5, palette);
+      createHotelBuilding(g, -50, y, -10, 35, 15, 4, palette);
+      break;
 
-  // Annex building (5 floors)
-  createHotelBuilding(g, 55, y, -15, 40, 18, 5);
+    case 'lshape':
+      // Two long wings meeting in an L, plus a small annex out front.
+      createHotelBuilding(g, -10, y, -18, 60, 22, 7, palette);
+      createHotelBuilding(g, 32, y, 8, 22, 38, 7, palette);
+      createHotelBuilding(g, -45, y, 5, 22, 14, 3, palette);
+      break;
 
-  // Second annex
-  createHotelBuilding(g, -50, y, -10, 35, 15, 4);
+    case 'tower':
+      // One round tower flanked by two low blocks — the iconic
+      // "Las Vegas / Dubai marina" silhouette.
+      createTowerHotel(g, 0, y, -12, 16, 38, palette);
+      createHotelBuilding(g, -42, y, -5, 32, 18, 4, palette);
+      createHotelBuilding(g, 42, y, -5, 32, 18, 4, palette);
+      break;
 
-  // Pools
-  createPool(g, -5, y, 20, 30, 15);
-  createPool(g, 30, y, 25, 12, 8);
-
-  // Water slides
-  createWaterSlide(g, 15, y, 40, 12, 0x2288ff);
-  createWaterSlide(g, -20, y, 38, 9, 0xff4444);
-  createWaterSlide(g, -35, y, 35, 6, 0x44dd88);
-
-  // Palm trees around pool (fewer for performance). Forest trees are
-  // 10-18m (TRUNK_LENGTH_MIN/MAX in WorldBuilder). Real-world palms are
-  // 15-25m. We bump the range to 14-22m so they don't look comically
-  // short next to the regular forest.
-  for (let i = 0; i < 6; i++) {
-    const px = randomRange(-40, 50);
-    const pz = randomRange(10, 50);
-    createPalmTree(g, px, y, pz, 14 + Math.random() * 8);
+    case 'terraced':
+      // Stepped pyramid main building, plus one small annex.
+      createTerracedHotel(g, 0, y, -10, 70, 36, 6, palette);
+      createHotelBuilding(g, -50, y, 0, 28, 14, 3, palette);
+      break;
   }
 
-  // Loungers (fewer for performance)
+  // Pools — count + position varies a bit per resort
+  const poolLayouts = [
+    [{ x: -5, z: 20, w: 30, d: 15 }, { x: 30, z: 25, w: 12, d: 8 }],
+    [{ x: 0, z: 22, w: 36, d: 18 }],
+    [{ x: -15, z: 22, w: 22, d: 12 }, { x: 22, z: 18, w: 18, d: 10 }, { x: 35, z: 35, w: 10, d: 8 }],
+  ];
+  const pools = poolLayouts[Math.floor(Math.random() * poolLayouts.length)];
+  for (const p of pools) createPool(g, p.x, y, p.z, p.w, p.d);
+
+  // Palms (around pools) — quantity + heights vary
+  const palmCount = 5 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < palmCount; i++) {
+    const px = randomRange(-45, 50);
+    const pz = randomRange(8, 50);
+    createPalmTree(g, px, y, pz, 14 + Math.random() * 9);
+  }
+
+  // Loungers — placed near the largest pool
   const loungerMat = makeMat(0xeeeecc);
-  for (let i = 0; i < 8; i++) {
+  const loungerCount = 6 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < loungerCount; i++) {
     const l = makeBox(0.8, 0.3, 2, loungerMat);
     l.position.set(randomRange(-30, 40), y + 0.15, randomRange(35, 48));
     l.rotation.y = Math.random() * 0.3;
