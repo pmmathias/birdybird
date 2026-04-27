@@ -230,8 +230,11 @@ export async function buildWorld(scene, renderer) {
   // toggles visibility between hi/lo bark + hides leaves outright beyond
   // LEAF_HIDE_DIST. Big triangle savings on far clusters, no visual hit
   // because at >400 m the cylinder facet count is below the eye's resolution.
-  const LOD_NEAR_DIST   = 400;   // < this: high-poly bark
-  const LOD_FAR_DIST    = 800;   // > this: leaves hidden entirely
+  const LOD_NEAR_DIST   = 500;   // < this: high-poly bark
+  // World spans ±3000m and clusters can be hundreds of metres from each
+  // other, so leaves stay on across the whole island. Frustum culling
+  // skips off-screen clusters; the per-leaf shader LOD shrinks distant
+  // leaves to half-area; we no longer hide the leaf cluster entirely.
   const LOW_BARK_SEGS   = 4;     // vs 8 for high
   const LOW_BARK_GEO    = new THREE.CylinderGeometry(1, 1, 1, LOW_BARK_SEGS, 1);
   const _camTmp = new THREE.Vector3();
@@ -386,9 +389,13 @@ export async function buildWorld(scene, renderer) {
       const distToCenter = Math.sqrt(dx * dx + dz * dz);
       const dist = Math.max(0, distToCenter - (cluster.radius || 0));
       const near = dist < LOD_NEAR_DIST;
+      // Hi-poly bark for near clusters, lo-poly for the rest. Both
+      // bark and leaves stay visible at all distances — frustum culling
+      // already drops off-screen clusters and per-leaf shader LOD
+      // shrinks far leaves to half-area.
       if (cluster.hi) cluster.hi.visible = near;
-      if (cluster.lo) cluster.lo.visible = !near && dist < LOD_FAR_DIST + 200;
-      if (cluster.leaf) cluster.leaf.visible = dist < LOD_FAR_DIST;
+      if (cluster.lo) cluster.lo.visible = !near;
+      if (cluster.leaf) cluster.leaf.visible = true;
     }
   }
 
