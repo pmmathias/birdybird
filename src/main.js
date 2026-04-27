@@ -171,7 +171,8 @@ const isMobile = isMobileDevice(); // synchronous — see top of file
     mobileUI.onStart(() => {
       console.log('Mobile game started');
       if (nestQuest) nestQuest.start();
-      if (ringRush) ringRush.start();
+      // PickupSpawner has no start() — only RingRush does. Guard the call.
+      if (ringRush && typeof ringRush.start === 'function') ringRush.start();
       let lastTap = 0;
       document.addEventListener('touchend', () => {
         const now = Date.now();
@@ -549,5 +550,5 @@ if (!isMobile) {
   initWebcam();
   // On desktop we auto-start — no calibration wizard to wait for
   if (nestQuest) nestQuest.start();
-  if (ringRush) ringRush.start();
+  if (ringRush && typeof ringRush.start === 'function') ringRush.start();
 }
