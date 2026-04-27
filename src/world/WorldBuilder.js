@@ -451,10 +451,23 @@ export async function buildWorld(scene, renderer) {
   }
 
   // --- Underwater world (reduced on mobile) ---
-  // Temporary perf test: ?nounderwater=1 disables the entire underwater
-  // system (sprites, sharks, whales, coral, overlay, fog swap).
+  // Underwater world is heavy to construct (~2400 sprites + textures).
+  // Lazy-init: only spin it up when the bird first nears the water
+  // surface. Players who never dive pay zero cost beyond a null check.
+  // ?nounderwater=1 keeps it permanently disabled (perf-bench helper).
   const _disableUW = new URLSearchParams(location.search).has('nounderwater');
-  const underwater = (IS_MOBILE || _disableUW) ? null : new UnderwaterWorld(scene, arcs);
+  let underwater = null;
+  function ensureUnderwater() {
+    if (underwater || IS_MOBILE || _disableUW) return underwater;
+    console.time('Underwater (lazy)');
+    underwater = new UnderwaterWorld(scene, arcs);
+    // Constructor attaches its group to the scene; detach immediately
+    // so it's only paid for during actual dives (Underwater.update
+    // re-attaches when birdAltitude < WATER_LEVEL).
+    if (underwater.group.parent) scene.remove(underwater.group);
+    console.timeEnd('Underwater (lazy)');
+    return underwater;
+  }
 
   // --- Octree + Frustum Culler ---
   console.time('Octree');
@@ -472,6 +485,11 @@ export async function buildWorld(scene, renderer) {
     water.update(dt, birdAltitude);
     clouds.update(dt);
     frustumCuller.update(camera);
+    // Trigger lazy underwater init slightly above water level so the
+    // construction hitch happens before the splash, not at it.
+    if (birdAltitude !== undefined && birdAltitude < WATER_LEVEL + 30) {
+      ensureUnderwater();
+    }
     if (underwater) underwater.update(dt, birdAltitude);
     if (rrUpdater) rrUpdater.update(elapsed);
     updateForestLOD(camera);
