@@ -336,10 +336,28 @@ export async function buildWorld(scene, renderer) {
           group.add(lo);
         }
 
+        // Compute actual spatial extent of the cluster so the per-frame
+        // LOD test uses (camera→cluster-edge) instead of (camera→center).
+        // With few clusters spanning >1 km each, the centre-only test
+        // hid leaves on trees right next to the bird because the cluster
+        // centre was hundreds of metres away.
+        let maxOff2 = 0;
+        const tmpMat = new THREE.Matrix4();
+        for (const id of ids) {
+          src.getMatrixAt(id, tmpMat);
+          const dx = tmpMat.elements[12] - centers[c].x;
+          const dz = tmpMat.elements[14] - centers[c].z;
+          const d2 = dx * dx + dz * dz;
+          if (d2 > maxOff2) maxOff2 = d2;
+        }
+        const clusterRadius = Math.sqrt(maxOff2);
+
         // Track per-cluster LOD state. Leaves and bark-lo are stored on
         // the same record so the per-frame loop has everything it needs.
         let entry = group.userData.lodClusters[c];
-        if (!entry) entry = group.userData.lodClusters[c] = { center: centers[c] };
+        if (!entry) entry = group.userData.lodClusters[c] = { center: centers[c], radius: clusterRadius };
+        // Take the larger of the radii so leaves + bark agree.
+        if (clusterRadius > entry.radius) entry.radius = clusterRadius;
         if (kind === 'bark')      { entry.hi = hi; entry.lo = lo; }
         else if (kind === 'leaf') { entry.leaf = hi; }
       }
@@ -356,15 +374,17 @@ export async function buildWorld(scene, renderer) {
   }
 
   /** Per-frame LOD update — toggles each cluster's hi/lo bark + leaf
-   *  visibility based on distance to camera. Called from the main loop. */
+   *  visibility based on distance from camera to the cluster's nearest
+   *  edge (not its centre). With wide clusters this matters: the bird
+   *  can be inside one tree while the cluster centre is 600 m away. */
   function updateForestLOD(camera) {
     if (!forest || !forest.userData.lodClusters) return;
     camera.getWorldPosition(_camTmp);
     for (const cluster of forest.userData.lodClusters) {
       const dx = _camTmp.x - cluster.center.x;
       const dz = _camTmp.z - cluster.center.z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
-      // Hysteresis ±20 m around boundaries to avoid pop-flicker
+      const distToCenter = Math.sqrt(dx * dx + dz * dz);
+      const dist = Math.max(0, distToCenter - (cluster.radius || 0));
       const near = dist < LOD_NEAR_DIST;
       if (cluster.hi) cluster.hi.visible = near;
       if (cluster.lo) cluster.lo.visible = !near && dist < LOD_FAR_DIST + 200;

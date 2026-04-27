@@ -1,71 +1,71 @@
 # birdybird perf bench
 
-_Captured 2026-04-27T06:01:50.292Z_
+_Captured 2026-04-27T07:20:35.975Z_
 
 ## WebGL2 (default)
 
 - renderer: **WebGPU**  |  water: **iFFT ×3 (WebGPU)**
 - canvas: 1280x720
-- geometries: 334, textures: 50, programs: null
+- geometries: 260, textures: 51, programs: null
 
 ### Baseline FPS per scenario
 
 | scenario | avg fps | p95 fps | frame-ms avg | p95 ms | p99 ms | draw calls | triangles |
 |---|---|---|---|---|---|---|---|
-| air-over-land | 47.4 | 33.7 | 21.11 | 29.70 | 30.60 | 855 | 6381201 |
-| air-over-ocean | 49.1 | 36.9 | 20.36 | 27.10 | 28.30 | 4887 | 4727309 |
-| skim-ocean | 49.2 | 36.9 | 20.31 | 27.10 | 28.00 | 9045 | 4743727 |
-| submerged | 49.2 | 37.2 | 20.31 | 26.90 | 27.70 | 12833 | 4731145 |
-| inside-forest | 48.4 | 34.1 | 20.65 | 29.30 | 30.20 | 15768 | 5561957 |
+| air-over-land | 46.1 | 30.2 | 21.68 | 33.10 | 35.00 | 804 | 7174263 |
+| air-over-ocean | 49.8 | 38.5 | 20.07 | 26.00 | 26.60 | 4746 | 4726115 |
+| skim-ocean | 49.7 | 38.0 | 20.11 | 26.30 | 27.60 | 8928 | 4742569 |
+| submerged | 49.5 | 37.9 | 20.22 | 26.40 | 27.40 | 12715 | 4730571 |
+| inside-forest | 49.1 | 36.0 | 20.38 | 27.80 | 29.70 | 15677 | 5737841 |
 
 ### Bottleneck toggles (Δ fps when subsystem is hidden)
 
 | scenario | water | forest | clouds | houses | terrain |
 |---|---|---|---|---|---|
-| air-over-land | -0.0 | +1.2 | -0.3 | +0.2 | +0.0 |
-| air-over-ocean | +0.1 | +0.3 | +0.3 | +0.3 | +0.3 |
-| skim-ocean | +0.2 | -8.5 | -0.8 | -0.0 | -0.1 |
-| submerged | -4.3 | -0.5 | -0.2 | -0.5 | -0.2 |
-| inside-forest | -2.2 | +0.4 | +0.1 | +0.3 | +0.1 |
+| air-over-land | -0.8 | +2.1 | -0.6 | -0.2 | -0.2 |
+| air-over-ocean | -0.1 | -0.1 | -0.2 | -0.1 | -0.0 |
+| skim-ocean | -0.1 | -11.1 | -1.7 | -0.2 | +0.0 |
+| submerged | -0.0 | -2.0 | -0.8 | -0.3 | -0.7 |
+| inside-forest | +0.1 | +0.1 | +0.2 | +0.1 | -7.7 |
 
 ### Ranked bottlenecks per scenario
 
-- **air-over-land**: rr-forest (+1.2), buildings (+0.2), terrain chunks (+0.0), water plane (+-0.0), clouds (+-0.3)
-- **air-over-ocean**: clouds (+0.3), rr-forest (+0.3), terrain chunks (+0.3), buildings (+0.3), water plane (+0.1)
-- **skim-ocean**: water plane (+0.2), buildings (+-0.0), terrain chunks (+-0.1), clouds (+-0.8), rr-forest (+-8.5)
-- **submerged**: terrain chunks (+-0.2), clouds (+-0.2), rr-forest (+-0.5), buildings (+-0.5), water plane (+-4.3)
-- **inside-forest**: rr-forest (+0.4), buildings (+0.3), terrain chunks (+0.1), clouds (+0.1), water plane (+-2.2)
+- **air-over-land**: rr-forest (+2.1), buildings (+-0.2), terrain chunks (+-0.2), clouds (+-0.6), water plane (+-0.8)
+- **air-over-ocean**: terrain chunks (+-0.0), buildings (+-0.1), water plane (+-0.1), rr-forest (+-0.1), clouds (+-0.2)
+- **skim-ocean**: terrain chunks (+0.0), water plane (+-0.1), buildings (+-0.2), clouds (+-1.7), rr-forest (+-11.1)
+- **submerged**: water plane (+-0.0), buildings (+-0.3), terrain chunks (+-0.7), clouds (+-0.8), rr-forest (+-2.0)
+- **inside-forest**: clouds (+0.2), rr-forest (+0.1), water plane (+0.1), buildings (+0.1), terrain chunks (+-7.7)
 
 ## WebGPU
 
 - renderer: **WebGPU**  |  water: **iFFT ×3 (WebGPU)**
 - canvas: 1280x720
-- geometries: 124, textures: 51, programs: null
+- geometries: 91, textures: 51, programs: null
 
 ### Baseline FPS per scenario
 
 | scenario | avg fps | p95 fps | frame-ms avg | p95 ms | p99 ms | draw calls | triangles |
 |---|---|---|---|---|---|---|---|
-| air-over-land | 43.6 | 31.3 | 22.92 | 31.90 | 34.00 | 777 | 8584923 |
-| air-over-ocean | 48.6 | 37.0 | 20.56 | 27.00 | 28.40 | 4587 | 4725701 |
-| skim-ocean | 49.2 | 36.9 | 20.34 | 27.10 | 27.80 | 8721 | 4742109 |
-| submerged | 48.6 | 36.5 | 20.59 | 27.40 | 28.70 | 12489 | 4730339 |
-| inside-forest | 48.3 | 34.5 | 20.72 | 29.00 | 30.10 | 15430 | 5879793 |
+| air-over-land | 42.7 | 32.3 | 23.43 | 31.00 | 32.40 | 780 | 9282075 |
+| air-over-ocean | 49.3 | 38.0 | 20.29 | 26.30 | 27.80 | 4527 | 4728437 |
+| skim-ocean | 46.8 | 35.3 | 21.39 | 28.30 | 32.60 | 8619 | 4744867 |
+| submerged | 48.6 | 37.7 | 20.57 | 26.50 | 27.40 | 12480 | 4731715 |
+| inside-forest | 44.8 | 26.6 | 22.30 | 37.60 | 48.60 | 15382 | 6260495 |
 
 ### Bottleneck toggles (Δ fps when subsystem is hidden)
 
 | scenario | water | forest | clouds | houses | terrain |
 |---|---|---|---|---|---|
-| air-over-land | -0.0 | +4.8 | -0.1 | +0.2 | -0.1 |
-| air-over-ocean | +0.5 | +0.4 | +0.3 | +0.4 | +0.5 |
-| skim-ocean | -0.1 | -4.0 | -5.5 | -0.4 | -0.2 |
-| submerged | -0.4 | +0.4 | +0.3 | +0.3 | +0.4 |
-| inside-forest | +0.2 | +0.7 | -2.8 | +0.2 | +0.3 |
+| air-over-land | +0.1 | +6.0 | -0.6 | -0.2 | -0.6 |
+| air-over-ocean | -0.6 | +0.1 | +0.1 | +0.2 | -1.0 |
+| skim-ocean | +2.5 | +2.4 | +1.4 | +2.2 | +1.6 |
+| submerged | +0.9 | -1.2 | -0.1 | +0.5 | -0.8 |
+| inside-forest | +3.3 | +1.6 | +0.5 | +0.8 | -2.9 |
 
 ### Ranked bottlenecks per scenario
 
-- **air-over-land**: rr-forest (+4.8), buildings (+0.2), water plane (+-0.0), terrain chunks (+-0.1), clouds (+-0.1)
-- **air-over-ocean**: terrain chunks (+0.5), water plane (+0.5), buildings (+0.4), rr-forest (+0.4), clouds (+0.3)
-- **skim-ocean**: water plane (+-0.1), terrain chunks (+-0.2), buildings (+-0.4), rr-forest (+-4.0), clouds (+-5.5)
-- **submerged**: rr-forest (+0.4), terrain chunks (+0.4), buildings (+0.3), clouds (+0.3), water plane (+-0.4)
-- **inside-forest**: rr-forest (+0.7), terrain chunks (+0.3), water plane (+0.2), buildings (+0.2), clouds (+-2.8)
+- **air-over-land**: rr-forest (+6.0), water plane (+0.1), buildings (+-0.2), clouds (+-0.6), terrain chunks (+-0.6)
+- **air-over-ocean**: buildings (+0.2), clouds (+0.1), rr-forest (+0.1), water plane (+-0.6), terrain chunks (+-1.0)
+- **skim-ocean**: water plane (+2.5), rr-forest (+2.4), buildings (+2.2), terrain chunks (+1.6), clouds (+1.4)
+- **submerged**: water plane (+0.9), buildings (+0.5), clouds (+-0.1), terrain chunks (+-0.8), rr-forest (+-1.2)
+- **inside-forest**: water plane (+3.3), rr-forest (+1.6), buildings (+0.8), clouds (+0.5), terrain chunks (+-2.9)

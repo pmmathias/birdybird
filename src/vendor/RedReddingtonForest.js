@@ -27,7 +27,7 @@ import { createBarkNodeMaterial, createLeafNodeMaterial } from './RedReddingtonF
 
 export const DEFAULT_CONFIG = {
   // Forest
-  TREE_COUNT: 750,
+  TREE_COUNT: 1500,
   FOREST_RADIUS: 80,
   CLEAR_RADIUS: 5,
 
@@ -52,11 +52,14 @@ export const DEFAULT_CONFIG = {
   // Colors
   BARK_COLOR: [0.24, 0.16, 0.09],
   BARK_DISTANT_TINT: [0.29, 0.52, 0.27],
-  LEAF_HUE_MIN: 0.25,
-  LEAF_HUE_MAX: 0.35,
+  // Wider leaf-hue range so neighbouring trees read as different
+  // species: olive (0.18) → leaf-green (0.27) → forest-green (0.33)
+  // → cool teal-green (0.42). Saturation also varies a touch.
+  LEAF_HUE_MIN: 0.18,
+  LEAF_HUE_MAX: 0.42,
   LEAF_SATURATION: 0.55,
-  LEAF_LIGHTNESS_MIN: 0.35,
-  LEAF_LIGHTNESS_MAX: 0.5,
+  LEAF_LIGHTNESS_MIN: 0.28,
+  LEAF_LIGHTNESS_MAX: 0.55,
 
   LEAF_TINGE_PERCENT: 0.15,
   LEAF_TINGE_YELLOW_CHANCE: 0.5,
