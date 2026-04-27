@@ -27,7 +27,7 @@ import { createBarkNodeMaterial, createLeafNodeMaterial } from './RedReddingtonF
 
 export const DEFAULT_CONFIG = {
   // Forest
-  TREE_COUNT: 1500,
+  TREE_COUNT: 3000,
   FOREST_RADIUS: 80,
   CLEAR_RADIUS: 5,
 
@@ -52,14 +52,16 @@ export const DEFAULT_CONFIG = {
   // Colors
   BARK_COLOR: [0.24, 0.16, 0.09],
   BARK_DISTANT_TINT: [0.29, 0.52, 0.27],
-  // Wider leaf-hue range so neighbouring trees read as different
-  // species: olive (0.18) → leaf-green (0.27) → forest-green (0.33)
-  // → cool teal-green (0.42). Saturation also varies a touch.
-  LEAF_HUE_MIN: 0.18,
-  LEAF_HUE_MAX: 0.42,
+  // Wide leaf-hue range so neighbouring trees read as different species:
+  // ochre (0.12) → olive (0.18) → leaf-green (0.27) → forest-green (0.33)
+  // → cool teal-green (0.42) → blue-spruce edge (0.48). Saturation +
+  // lightness also vary widely. Per-leaf jitter on top adds intra-tree
+  // shading.
+  LEAF_HUE_MIN: 0.12,
+  LEAF_HUE_MAX: 0.48,
   LEAF_SATURATION: 0.55,
-  LEAF_LIGHTNESS_MIN: 0.28,
-  LEAF_LIGHTNESS_MAX: 0.55,
+  LEAF_LIGHTNESS_MIN: 0.22,
+  LEAF_LIGHTNESS_MAX: 0.6,
 
   LEAF_TINGE_PERCENT: 0.15,
   LEAF_TINGE_YELLOW_CHANCE: 0.5,
@@ -493,9 +495,11 @@ export class InstancedForest {
       this._matrix.compose(leafPos, leafQuat, this._scale);
       this.leafMatrices.push(this._matrix.clone());
 
-      let h = leafHue + (rand() - 0.5) * 0.05;
-      let s = this.config.LEAF_SATURATION + rand() * 0.15;
-      let l = leafLightness + (rand() - 0.5) * 0.08;
+      // Stronger per-leaf jitter so a single tree shows highlighted +
+      // shadowed leaf variation instead of a uniform mass.
+      let h = leafHue + (rand() - 0.5) * 0.10;
+      let s = this.config.LEAF_SATURATION + (rand() - 0.3) * 0.30;
+      let l = leafLightness + (rand() - 0.5) * 0.18;
 
       if (rand() < this.config.LEAF_TINGE_PERCENT) {
         if (rand() < this.config.LEAF_TINGE_YELLOW_CHANCE) {
@@ -647,10 +651,13 @@ export class InstancedForest {
             vec2 wrappedUV = fract(vUv);
             vec3 texColor = texture2D(barkTexture, wrappedUV).rgb;
 
-            float brightness = 0.85 + vTreeRand * 0.3;
+            // Per-tree variation: wider brightness band + per-channel hue
+            // skew so different individuals read as different bark types
+            // (silver birch / oak / pine etc) without textures swap.
+            float brightness = 0.65 + vTreeRand * 0.7;
             vec3 baseColor = mix(barkColor, texColor, 0.7) * 1.8 * brightness;
-
-            baseColor *= vec3(1.0 + (vTreeRand - 0.5) * 0.1, 1.0, 1.0 - (vTreeRand - 0.5) * 0.1);
+            float skew = (vTreeRand - 0.5);
+            baseColor *= vec3(1.0 + skew * 0.25, 1.0 + skew * skew * 0.18, 1.0 - skew * 0.25);
 
             baseColor = mix(baseColor, leafTintColor, vLeafTint * 0.7);
 

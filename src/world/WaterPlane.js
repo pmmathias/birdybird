@@ -137,26 +137,26 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   // trusted baseline wave look. Cascaded mode then LAYERS two additional
   // spectra on top so the difference is obviously additive: "you see the
   // same waves you're used to, plus more stuff".
+  // Lower wind speed on the dominant cascade A → smaller swell, energy
+  // shifts toward higher frequencies. Choppiness bumped so the remaining
+  // crests stay sharp. Cascade B and C wind speeds bumped slightly so
+  // mid + high freq detail dominates the surface.
   const cascadeA = new Ocean4(renderer, {
     Res: IS_MOBILE ? 256 : 512,
     Siz: WAVE_TILE,                              // 2400m — same in both modes
-    WSp: 9, WHd: 295, Chp: 2.8, Spd: 1.3,
+    WSp: 5.5, WHd: 295, Chp: 3.4, Spd: 1.4,
   });
-  // Cascade B at 300m — bigger than my first 150m attempt so each tile
-  // spans ~48 vertices → proper geometric contribution. Strong weight
-  // (0.8) so its wind-chop pattern is clearly layered on top of A's swell.
+  // Cascade B at 300m — wind-chop layer.
   const cascadeB = CASCADES_ENABLED ? new Ocean4(renderer, {
     Res: 256,
     Siz: 300,
-    WSp: 5.5, WHd: 240, Chp: 1.8, Spd: 1.7,
+    WSp: 6.5, WHd: 240, Chp: 2.4, Spd: 1.9,
   }) : null;
-  // Cascade C at 40m — ~6 vertices per tile, right at the limit of what we
-  // can resolve geometrically. We use it ONLY for normal-map sparkle so we
-  // don't get aliasing artifacts from undersampled vertex displacement.
+  // Cascade C at 40m — ~6 vertices per tile, normal-only sparkle.
   const cascadeC = CASCADES_ENABLED ? new Ocean4(renderer, {
     Res: 256,
     Siz: 40,
-    WSp: 2.0, WHd: 310, Chp: 1.4, Spd: 2.5,
+    WSp: 3.5, WHd: 310, Chp: 2.0, Spd: 2.8,
   }) : null;
 
   const geometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, SEGMENTS, SEGMENTS);
@@ -181,8 +181,10 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
   // Weighted sum of geometry-contributing cascades. B at 0.8 (strong
   // enough to clearly layer visible chop on top of A). Y damped to 0.35
   // overall to avoid sea-sick vertical swell.
+  // High-freq cascade B contributes more strongly to the displacement
+  // sum so the surface reads as wind-chop dominated rather than swell.
   let sumDisp = dispA.xyz;
-  if (CASCADES_ENABLED) sumDisp = sumDisp.add(dispB.xyz.mul(0.8));
+  if (CASCADES_ENABLED) sumDisp = sumDisp.add(dispB.xyz.mul(1.15));
   const dampedDisp = vec3(sumDisp.x, sumDisp.y.mul(0.35), sumDisp.z);
   material.positionNode = positionLocal.add(dampedDisp);
 
@@ -215,8 +217,8 @@ function _createIFFTWaterWebGPU(sun, renderer, _ignoredPlaneSize, _ignoredSegmen
       const nC = texture(cascadeC.normMapTexture, uv().mul(uvScaleC)).xyz.mul(2.0).sub(1.0);
       // Stronger B/C weights so the user CAN see the multi-scale texture.
       nSum = nSum
-        .add(vec3(nB.x.mul(0.8), nB.z.mul(0.8), nB.y.mul(0.8)))
-        .add(vec3(nC.x.mul(0.5), nC.z.mul(0.5), nC.y.mul(0.5)));
+        .add(vec3(nB.x.mul(1.1), nB.z.mul(1.1), nB.y.mul(1.1)))
+        .add(vec3(nC.x.mul(0.85), nC.z.mul(0.85), nC.y.mul(0.85)));
     }
     const N = normalize(nSum);
 

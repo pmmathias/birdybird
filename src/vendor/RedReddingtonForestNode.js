@@ -119,18 +119,20 @@ export function createBarkNodeMaterial(barkTexture, config, barkGeometry) {
     const safeFade = min(uFadeStart, uMaxDist.sub(1.0));
     const leafTintAmt = smoothstep(safeFade, uMaxDist, dist);
 
-    // Tree-unique brightness from instance center (mimics GLSL treeRand1)
+    // Tree-unique brightness from instance center (mimics GLSL treeRand1).
+    // Wider brightness band + per-channel hue skew so different individuals
+    // read as different bark types (silver birch / oak / pine etc).
     const h = fract(sin(instCenter.x.mul(12.9898).add(instCenter.z.mul(78.233))).mul(43758.5453));
-    const brightness = float(0.85).add(h.mul(0.3));
+    const brightness = float(0.65).add(h.mul(0.7));
 
     const texColor = tex.sample(uv()).rgb;
     const base = mix(uBarkColor, texColor, 0.7).mul(1.8).mul(brightness);
 
-    // Per-tree hue skew
+    const skew = h.sub(0.5);
     const hueSkew = vec3(
-      float(1.0).add(h.sub(0.5).mul(0.1)),
-      float(1.0),
-      float(1.0).sub(h.sub(0.5).mul(0.1)),
+      float(1.0).add(skew.mul(0.25)),
+      float(1.0).add(skew.mul(skew).mul(0.18)),
+      float(1.0).sub(skew.mul(0.25)),
     );
     const tinted = base.mul(hueSkew);
 
