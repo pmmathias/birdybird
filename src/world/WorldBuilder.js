@@ -224,9 +224,23 @@ export async function buildWorld(scene, renderer) {
   // sliced per cluster. Material is shared too. Memory cost is ~20 extra
   // geometry wrappers + 20 extra instance-attribute buffers, but each is
   // 1/20th the size of the monolithic version.
+  //
+  // T027: each cluster also carries a low-LOD bark twin built from a 4-segment
+  // cylinder (vs the 8-segment original). Per-frame `updateForestLOD(camera)`
+  // toggles visibility between hi/lo bark + hides leaves outright beyond
+  // LEAF_HIDE_DIST. Big triangle savings on far clusters, no visual hit
+  // because at >400 m the cylinder facet count is below the eye's resolution.
+  const LOD_NEAR_DIST   = 400;   // < this: high-poly bark
+  const LOD_FAR_DIST    = 800;   // > this: leaves hidden entirely
+  const LOW_BARK_SEGS   = 4;     // vs 8 for high
+  const LOW_BARK_GEO    = new THREE.CylinderGeometry(1, 1, 1, LOW_BARK_SEGS, 1);
+  const _camTmp = new THREE.Vector3();
+
   function splitForestByClusters(barkMesh, leafMesh, centers) {
     const group = new THREE.Group();
     if (!barkMesh && !leafMesh) return group;
+    // Per-frame LOD-switch state: cluster id → { center, hi, lo, leaf }
+    group.userData.lodClusters = [];
 
     // For each source instance, find the closest cluster center (by XZ).
     const assignToClusters = (src) => {
@@ -249,63 +263,85 @@ export async function buildWorld(scene, renderer) {
       return buckets;
     };
 
+    /** Build one InstancedMesh sub-cluster from a slice of source instances.
+     *  `geometryOverride` (optional) lets callers swap in a different shared
+     *  base geometry (the LOD-low cylinder) while still copying the same
+     *  per-instance attributes. */
+    const buildSub = (src, kind, c, ids, sharedAttrs, sharedIndex, instanceAttrNames, perInstanceRadius, geometryOverride) => {
+      const subGeo = new THREE.BufferGeometry();
+      const baseAttrs = geometryOverride ? geometryOverride.attributes : sharedAttrs;
+      const baseIndex = geometryOverride ? geometryOverride.index : sharedIndex;
+      for (const name in baseAttrs) subGeo.setAttribute(name, baseAttrs[name]);
+      if (baseIndex) subGeo.setIndex(baseIndex);
+
+      // Slice per-instance attributes down to this cluster's ids.
+      for (const name of instanceAttrNames) {
+        const srcAttr = src.geometry.attributes[name];
+        const size = srcAttr.itemSize;
+        const arr = new Float32Array(ids.length * size);
+        for (let j = 0; j < ids.length; j++) {
+          const srcIdx = ids[j] * size;
+          for (let k = 0; k < size; k++) arr[j * size + k] = srcAttr.array[srcIdx + k];
+        }
+        subGeo.setAttribute(name, new THREE.InstancedBufferAttribute(arr, size));
+      }
+
+      subGeo.boundingSphere = new THREE.Sphere(
+        new THREE.Vector3(0, perInstanceRadius * 0.5, 0),
+        perInstanceRadius,
+      );
+
+      const sub = new THREE.InstancedMesh(subGeo, src.material, ids.length);
+      sub.name = `rr-${kind}-c${c}`;
+      sub.frustumCulled = true;
+      sub.castShadow = false;
+      sub.receiveShadow = false;
+      const mat = new THREE.Matrix4();
+      for (let j = 0; j < ids.length; j++) {
+        src.getMatrixAt(ids[j], mat);
+        sub.setMatrixAt(j, mat);
+      }
+      sub.instanceMatrix.needsUpdate = true;
+      sub.computeBoundingSphere();
+      return sub;
+    };
+
     const splitOne = (src, kind) => {
       const buckets = assignToClusters(src);
       const instanceAttrNames = [];
+      const sharedAttrs = {};
       for (const name in src.geometry.attributes) {
         if (src.geometry.attributes[name].isInstancedBufferAttribute) {
           instanceAttrNames.push(name);
-        }
-      }
-      const sharedAttrs = {};
-      for (const name in src.geometry.attributes) {
-        if (!src.geometry.attributes[name].isInstancedBufferAttribute) {
+        } else {
           sharedAttrs[name] = src.geometry.attributes[name];
         }
       }
       const sharedIndex = src.geometry.index;
-      // Single-tree bounding radius — bark geometry uses it as the per-instance
-      // sphere; three.js expands it by each instance matrix during culling.
       const perInstanceRadius = kind === 'bark' ? 20 : 3;
 
-      const mat = new THREE.Matrix4();
       for (let c = 0; c < centers.length; c++) {
         const ids = buckets[c];
         if (ids.length === 0) continue;
 
-        const subGeo = new THREE.BufferGeometry();
-        for (const name in sharedAttrs) subGeo.setAttribute(name, sharedAttrs[name]);
-        if (sharedIndex) subGeo.setIndex(sharedIndex);
+        const hi = buildSub(src, kind, c, ids, sharedAttrs, sharedIndex, instanceAttrNames, perInstanceRadius);
+        group.add(hi);
 
-        // Slice per-instance attributes down to this cluster's ids.
-        for (const name of instanceAttrNames) {
-          const srcAttr = src.geometry.attributes[name];
-          const size = srcAttr.itemSize;
-          const arr = new Float32Array(ids.length * size);
-          for (let j = 0; j < ids.length; j++) {
-            const srcIdx = ids[j] * size;
-            for (let k = 0; k < size; k++) arr[j * size + k] = srcAttr.array[srcIdx + k];
-          }
-          subGeo.setAttribute(name, new THREE.InstancedBufferAttribute(arr, size));
+        // For bark only: also build a low-LOD twin sharing the same
+        // per-instance attribute slice but a 4-segment cylinder.
+        let lo = null;
+        if (kind === 'bark') {
+          lo = buildSub(src, 'bark-lo', c, ids, sharedAttrs, sharedIndex, instanceAttrNames, perInstanceRadius, LOW_BARK_GEO);
+          lo.visible = false;  // hi visible by default
+          group.add(lo);
         }
 
-        // Geometry-level sphere covers one tree's extent around its local
-        // origin. Three.js InstancedMesh.computeBoundingSphere() then
-        // expands it by all instance matrices → tight cluster-sized sphere.
-        subGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, perInstanceRadius * 0.5, 0), perInstanceRadius);
-
-        const sub = new THREE.InstancedMesh(subGeo, src.material, ids.length);
-        sub.name = `rr-${kind}-c${c}`;
-        sub.frustumCulled = true;
-        sub.castShadow = false;
-        sub.receiveShadow = false;
-        for (let j = 0; j < ids.length; j++) {
-          src.getMatrixAt(ids[j], mat);
-          sub.setMatrixAt(j, mat);
-        }
-        sub.instanceMatrix.needsUpdate = true;
-        sub.computeBoundingSphere();
-        group.add(sub);
+        // Track per-cluster LOD state. Leaves and bark-lo are stored on
+        // the same record so the per-frame loop has everything it needs.
+        let entry = group.userData.lodClusters[c];
+        if (!entry) entry = group.userData.lodClusters[c] = { center: centers[c] };
+        if (kind === 'bark')      { entry.hi = hi; entry.lo = lo; }
+        else if (kind === 'leaf') { entry.leaf = hi; }
       }
       // Original monolithic geometry no longer needed.
       src.geometry.dispose();
@@ -313,8 +349,27 @@ export async function buildWorld(scene, renderer) {
 
     if (barkMesh) splitOne(barkMesh, 'bark');
     if (leafMesh) splitOne(leafMesh, 'leaf');
-    console.log(`  Forest split into ${group.children.length} cluster sub-meshes`);
+    // Compact userData.lodClusters (drop empty centers)
+    group.userData.lodClusters = group.userData.lodClusters.filter(Boolean);
+    console.log(`  Forest split into ${group.children.length} cluster sub-meshes (with LOD twins)`);
     return group;
+  }
+
+  /** Per-frame LOD update — toggles each cluster's hi/lo bark + leaf
+   *  visibility based on distance to camera. Called from the main loop. */
+  function updateForestLOD(camera) {
+    if (!forest || !forest.userData.lodClusters) return;
+    camera.getWorldPosition(_camTmp);
+    for (const cluster of forest.userData.lodClusters) {
+      const dx = _camTmp.x - cluster.center.x;
+      const dz = _camTmp.z - cluster.center.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      // Hysteresis ±20 m around boundaries to avoid pop-flicker
+      const near = dist < LOD_NEAR_DIST;
+      if (cluster.hi) cluster.hi.visible = near;
+      if (cluster.lo) cluster.lo.visible = !near && dist < LOD_FAR_DIST + 200;
+      if (cluster.leaf) cluster.leaf.visible = dist < LOD_FAR_DIST;
+    }
   }
 
   let rrUpdater = null;
@@ -389,6 +444,7 @@ export async function buildWorld(scene, renderer) {
     frustumCuller.update(camera);
     if (underwater) underwater.update(dt, birdAltitude);
     if (rrUpdater) rrUpdater.update(elapsed);
+    updateForestLOD(camera);
   }
 
   return { update, arcs, terrainChunks: chunks, regenerateForest, regenerateLandmark };

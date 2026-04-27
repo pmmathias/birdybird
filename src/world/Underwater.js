@@ -342,11 +342,15 @@ export class UnderwaterWorld {
     this._fishData = [];
     this._fishMeshes = [];
 
-    // Create instanced mesh per species
+    // Create instanced mesh per species. Bench (T028) showed 6 × 800
+    // = 4800 fish sprites = 4800 individual draw calls — way over budget
+    // (each sprite is its own draw call in three.js). Cut to 200/species
+    // = 1200 total. Visually still feels alive at swim distance because
+    // depth-bias clusters them in deep ocean rather than scattering.
     for (let s = 0; s < fishTextures.length; s++) {
       const mat = new THREE.SpriteMaterial({ map: fishTextures[s], transparent: true, fog: false });
       const positions = [];
-      const target = 800;
+      const target = 200;
 
       for (let a = 0; a < target * 4 && positions.length < target; a++) {
         const pos = this._validOceanPos(0.85, 15); // fish only in deep ocean
@@ -420,7 +424,9 @@ export class UnderwaterWorld {
       return tex;
     });
 
-    for (let i = 0; i < 4000; i++) {
+    // Bench T028: 4000 coral sprites = 4000 draw calls. Slashed to 1200;
+    // depth-bias keeps them where the player would actually fly past.
+    for (let i = 0; i < 1200; i++) {
       const pos = this._validWaterPos(0.75);
       if (!pos) continue;
       // Depth bias: more coral in deeper water
