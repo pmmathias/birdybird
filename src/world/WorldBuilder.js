@@ -451,7 +451,10 @@ export async function buildWorld(scene, renderer) {
   }
 
   // --- Underwater world (reduced on mobile) ---
-  const underwater = IS_MOBILE ? null : new UnderwaterWorld(scene, arcs);
+  // Temporary perf test: ?nounderwater=1 disables the entire underwater
+  // system (sprites, sharks, whales, coral, overlay, fog swap).
+  const _disableUW = new URLSearchParams(location.search).has('nounderwater');
+  const underwater = (IS_MOBILE || _disableUW) ? null : new UnderwaterWorld(scene, arcs);
 
   // --- Octree + Frustum Culler ---
   console.time('Octree');

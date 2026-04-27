@@ -38,25 +38,21 @@ const CLOCK_RIM_GEO = new THREE.TorusGeometry(4.5, 0.4, 10, 28);
 const CLOCK_HAND_LONG_GEO = new THREE.BoxGeometry(0.35, 3.6, 0.2);
 const CLOCK_HAND_SHORT_GEO = new THREE.BoxGeometry(2.4, 0.35, 0.2);
 
-// Chevron arrow geometry — flat 5-vertex swoosh (V-shape with body) in
-// the XZ plane, tip pointing +Z. DoubleSide material so it's visible
-// from above and below as it rotates.
-const CHEVRON_GEO = (() => {
-  const g = new THREE.BufferGeometry();
-  const vertices = new Float32Array([
-     0,    0,  2.5,    // 0 tip
-    -1.7,  0, -1.0,    // 1 left outer
-    -0.5,  0, -0.2,    // 2 left inner
-     0.5,  0, -0.2,    // 3 right inner
-     1.7,  0, -1.0,    // 4 right outer
-  ]);
-  // Two triangles forming the chevron body
-  const indices = [0, 2, 1,  0, 4, 3];
-  g.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-  g.setIndex(indices);
-  g.computeVertexNormals();
+// Chevron arm: a tube from one end to the other. We build it as a
+// CylinderGeometry pre-translated so its base is at the origin and its
+// length runs along +Y; then per-instance rotation aims it from the
+// shoulder point to the tip.
+const ARM_RADIUS = 0.32;
+function _buildArmGeo(length) {
+  const g = new THREE.CylinderGeometry(ARM_RADIUS, ARM_RADIUS, length, 8);
+  g.translate(0, length / 2, 0);  // pivot at base end
   return g;
-})();
+}
+// Tip ball — small sphere at the chevron point so the join looks clean
+const TIP_BALL_GEO = new THREE.IcosahedronGeometry(ARM_RADIUS * 1.4, 0);
+
+const _UP = new THREE.Vector3(0, 1, 0);
+const _TMP_DIR = new THREE.Vector3();
 
 export class Pickup {
   /**
@@ -97,21 +93,51 @@ export class Pickup {
   }
 
   _buildSpeedArrow() {
-    // Three flat chevrons in a stagger pattern — middle one tallest +
-    // brightest tip, outer two trail behind in dimmer cyan. The whole
-    // group rotates slowly around Y so it's visible from any approach
-    // angle and reads as "speed".
-    const positions = [
-      { y:  0.0, scale: 1.0,  mat: SPEED_TIP_MAT, z:  0 },
-      { y:  0.0, scale: 0.85, mat: SPEED_MAT,    z: -1.4 },
-      { y:  0.0, scale: 0.7,  mat: SPEED_MAT,    z: -2.7 },
+    // Three 3D chevrons in a stagger pattern, each a pair of cylinder
+    // arms meeting at a tip ball. Looks the same from above and below
+    // because the arms ARE 3D — the previous flat-triangle version
+    // disappeared when viewed edge-on from below.
+    const cfgs = [
+      { z:  0.0, scale: 1.0,  mat: SPEED_TIP_MAT },
+      { z: -1.6, scale: 0.85, mat: SPEED_MAT },
+      { z: -3.0, scale: 0.7,  mat: SPEED_MAT },
     ];
-    for (const cfg of positions) {
-      const chevron = new THREE.Mesh(CHEVRON_GEO, cfg.mat);
-      chevron.position.set(0, cfg.y, cfg.z);
-      chevron.scale.setScalar(cfg.scale);
-      this.mesh.add(chevron);
+    for (const cfg of cfgs) {
+      const chev = this._buildChevron(cfg.scale, cfg.mat);
+      chev.position.z = cfg.z;
+      this.mesh.add(chev);
     }
+  }
+
+  /** A single 3D chevron — two cylinder arms meeting at a tip ball,
+   *  pointing along +Z (forward) with the V opening backward. */
+  _buildChevron(scale, mat) {
+    const grp = new THREE.Group();
+    const tip   = new THREE.Vector3(0, 0,  2.5 * scale);
+    const left  = new THREE.Vector3(-1.7 * scale, 0, -1.0 * scale);
+    const right = new THREE.Vector3( 1.7 * scale, 0, -1.0 * scale);
+
+    grp.add(this._buildArm(left, tip, mat, scale));
+    grp.add(this._buildArm(right, tip, mat, scale));
+
+    // Tip sphere so the two arms blend cleanly at the apex
+    const ball = new THREE.Mesh(TIP_BALL_GEO, mat);
+    ball.position.copy(tip);
+    ball.scale.setScalar(scale);
+    grp.add(ball);
+    return grp;
+  }
+
+  _buildArm(from, to, mat, scale) {
+    _TMP_DIR.copy(to).sub(from);
+    const len = _TMP_DIR.length();
+    const geo = _buildArmGeo(len);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(from);
+    // Aim the cylinder's local +Y at the (to-from) direction
+    mesh.quaternion.setFromUnitVectors(_UP, _TMP_DIR.clone().normalize());
+    mesh.scale.set(scale, 1, scale);  // thicken proportionally with size
+    return mesh;
   }
 
   update(dt, t) {
