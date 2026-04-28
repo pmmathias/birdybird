@@ -323,10 +323,11 @@ export class InstancedForest {
     const coniferType = {
       kind: 'conifer',
       levels: 1,
-      branchAngle: 1.35,    // ~77° from vertical → almost horizontal
-      lengthFalloff: 0.55,
-      radiusFalloff: 0.28,
-      branches: 8,
+      branchAngle: 1.25,    // ~72° from vertical — slightly less flat so
+                            // branches droop a touch like a real fir
+      lengthFalloff: 0.65,
+      radiusFalloff: 0.55,  // thicker branches so they're actually visible
+      branches: 7,
       startT0: 0.15, startT1: 0.95,  // branches whorl along the whole trunk
       taperByPos: true,              // top branches shorter than bottom
     };
@@ -385,11 +386,12 @@ export class InstancedForest {
         leafLightness = this.config.LEAF_LIGHTNESS_MIN + rand() * (this.config.LEAF_LIGHTNESS_MAX - this.config.LEAF_LIGHTNESS_MIN);
       }
 
-      // Conifers are taller and have thinner trunks than broadleaf trees
+      // Conifers are taller than broadleaf trees but trunk thickness
+      // closer to normal so the silhouette isn't a stick.
       const isConifer = treeType.kind === 'conifer';
       const treeScale = isConifer ? (0.85 + rand() * 0.7) : (0.6 + rand() * 0.8);
-      const trunkLengthMul = isConifer ? 1.8 : 1.0;   // taller trunk
-      const trunkRadiusMul = isConifer ? 0.5 : 1.0;   // thinner trunk
+      const trunkLengthMul = isConifer ? 1.7 : 1.0;
+      const trunkRadiusMul = isConifer ? 0.85 : 1.0;
       const trunkLength = (this.config.TRUNK_LENGTH_MIN + rand() * (this.config.TRUNK_LENGTH_MAX - this.config.TRUNK_LENGTH_MIN)) * treeScale * trunkLengthMul;
       const trunkRadius = (this.config.TRUNK_RADIUS_MIN + rand() * (this.config.TRUNK_RADIUS_MAX - this.config.TRUNK_RADIUS_MIN)) * treeScale * trunkRadiusMul;
 
@@ -436,7 +438,7 @@ export class InstancedForest {
     this.branchTreeBaseY.push(this._currentTreeBaseY);
 
     if (level >= treeType.levels - 1) {
-      this._addLeaves(end, direction, treeScale, leafHue, leafLightness, rand, topRadius, level, treeType.levels);
+      this._addLeaves(end, direction, treeScale, leafHue, leafLightness, rand, topRadius, level, treeType.levels, treeType);
     }
 
     if (level < treeType.levels) {
@@ -479,9 +481,16 @@ export class InstancedForest {
     }
   }
 
-  _addLeaves(branchEnd, branchDir, treeScale, leafHue, leafLightness, rand, topRadius, level, maxLevel) {
-    const count = this.config.LEAF_DENSITY + Math.floor(rand() * 3);
-    const size = this.config.LEAF_SIZE * treeScale;
+  _addLeaves(branchEnd, branchDir, treeScale, leafHue, leafLightness, rand, topRadius, level, maxLevel, treeType) {
+    // Conifer needles: small, dense clusters at branch tips so the branch
+    // reads as fluffy needles rather than a few large broadleaves.
+    const isConifer = treeType?.kind === 'conifer';
+    const baseCount = isConifer
+      ? this.config.LEAF_DENSITY * 4 + Math.floor(rand() * 6)
+      : this.config.LEAF_DENSITY + Math.floor(rand() * 3);
+    const count = baseCount;
+    const sizeMul = isConifer ? 0.45 : 1.0;
+    const size = this.config.LEAF_SIZE * treeScale * sizeMul;
     const spread = this.config.LEAF_SPREAD * treeScale;
 
     const perp1 = new THREE.Vector3(1, 0, 0);
