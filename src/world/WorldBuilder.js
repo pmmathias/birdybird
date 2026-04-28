@@ -115,6 +115,14 @@ export async function buildWorld(scene, renderer) {
   const urlParams = new URLSearchParams(location.search);
   const countOverride = parseInt(urlParams.get('trees'), 10);
   const clustersOverride = parseInt(urlParams.get('clusters'), 10);
+  // Scene-detail multiplier — controls broadleaf forest density,
+  // conifer density, and (later) cloud / sprite densities. Default
+  // mid = current tuning. Low for older GPUs / no-GPU laptops; high
+  // for desktop with discrete GPU.
+  const detailParam = urlParams.get('detail');
+  const detailMul = detailParam === 'low'  ? 0.40
+                  : detailParam === 'high' ? 1.75
+                  :                          1.00;
 
   /**
    * Sample cluster-based tree positions: pick K cluster centers (biased toward
@@ -184,7 +192,8 @@ export async function buildWorld(scene, renderer) {
   }
 
   function buildRrForest() {
-    const count = countOverride || (IS_MOBILE ? 600 : 2000);
+    const baseCount = IS_MOBILE ? 600 : 2000;
+    const count = countOverride || Math.round(baseCount * detailMul);
     // Cluster count tuning explored in perf-bench: fewer clusters (8) helped
     // air-over-land (+72%) but hurt inside-forest (-56%) because dense-view
     // scenarios benefit most from fine-grained frustum culling. 20 clusters
@@ -430,7 +439,8 @@ export async function buildWorld(scene, renderer) {
   // Independent of the L-system forest so we get cheap, clearly-shaped
   // fir trees. Two draw calls total regardless of conifer count.
   console.time('Conifers');
-  const coniferPositions = sampleConiferPositions(arcs, 900);
+  const coniferCount = Math.round(900 * detailMul);
+  const coniferPositions = sampleConiferPositions(arcs, coniferCount);
   const conifers = buildStackConeConifers(coniferPositions, arcs);
   scene.add(conifers);
   console.timeEnd('Conifers');

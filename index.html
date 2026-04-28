@@ -710,6 +710,13 @@
         <label><input type="radio" name="ocean" value="single"><span><b>Single Cascade</b><span class="opt-desc">Phil Crowther's Ocean4 iFFT — fast path, default on mobile.</span></span></label>
       </div>
 
+      <div class="opt-group" data-option="detail">
+        <h3>Scene Detail</h3>
+        <label><input type="radio" name="detail" value="low"><span><b>Low</b><span class="opt-desc">~40% trees + conifers — for integrated GPUs / older laptops.</span></span></label>
+        <label><input type="radio" name="detail" value="mid"><span><b>Mid (default)</b><span class="opt-desc">Balanced density for typical desktop hardware.</span></span></label>
+        <label><input type="radio" name="detail" value="high"><span><b>High</b><span class="opt-desc">~175% trees + conifers — for fat discrete GPUs that want to flex.</span></span></label>
+      </div>
+
       <div class="opt-group" id="options-mobile-group" style="display:none;">
         <h3>Mobile Tilt</h3>
         <button id="opt-recalib-btn" style="
@@ -829,16 +836,22 @@
       const oceanVal    = oceanParam === 'single'   ? 'single'
                         : oceanParam === 'cascaded' ? 'cascaded'
                         : oceanDefault;
+      const detailParam = params.get('detail');
+      const detailVal = detailParam === 'low' || detailParam === 'high' || detailParam === 'mid'
+                      ? detailParam : 'mid';
       const rRadio = oov.querySelector(`input[name="renderer"][value="${rendererVal}"]`);
       const oRadio = oov.querySelector(`input[name="ocean"][value="${oceanVal}"]`);
+      const dRadio = oov.querySelector(`input[name="detail"][value="${detailVal}"]`);
       if (rRadio) rRadio.checked = true;
       if (oRadio) oRadio.checked = true;
+      if (dRadio) dRadio.checked = true;
 
       // Apply: rebuild URL with new params and reload. Only set the ocean
       // param when it differs from this device's default, so URLs stay clean.
       function applyOptionChange() {
         const r = oov.querySelector('input[name="renderer"]:checked')?.value || 'auto';
         const o = oov.querySelector('input[name="ocean"]:checked')?.value    || oceanDefault;
+        const d = oov.querySelector('input[name="detail"]:checked')?.value   || 'mid';
         const newParams = new URLSearchParams(location.search);
         // Renderer
         if (r === 'auto') newParams.delete('renderer');
@@ -846,6 +859,9 @@
         // Ocean
         if (o === oceanDefault) newParams.delete('ocean');
         else                    newParams.set('ocean', o);
+        // Detail
+        if (d === 'mid') newParams.delete('detail');
+        else             newParams.set('detail', d);
         // Preserve skipcalib and other existing params naturally
         const queryString = newParams.toString();
         location.search = queryString ? '?' + queryString : '';
