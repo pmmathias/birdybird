@@ -160,18 +160,16 @@ function generateConiferTexture({ snowy = false, seed = 0 } = {}) {
   return tex;
 }
 
-// Crossed-billboard geometry: FOUR planes at 0°, 45°, 90°, 135° around
-// the vertical axis — gives 8 visible silhouette faces from any
-// horizontal angle so the tree always reads as 3D, regardless of
-// approach direction. Two planes (the previous version) showed an
-// obvious flat side at 45° angles. Cost: 8 triangles per tree (was 4)
-// — still trivial at 500 trees = 4000 triangles total.
+// Crossed-billboard geometry: SIX planes at 0°, 30°, 60°, 90°, 120°, 150°
+// around the vertical axis → 12 visible silhouette faces from any
+// horizontal angle, so the tree reads as a continuous 3D volume even
+// when the camera circles it. Cost: 12 triangles per tree.
 const _crossedBillboardGeo = (() => {
   const planes = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     const p = new THREE.PlaneGeometry(1, 2, 1, 1);
     p.translate(0, 1.0, 0);                 // base at y=0, top at y=2
-    p.rotateY((i / 4) * Math.PI);            // 0, 45, 90, 135
+    p.rotateY((i / 6) * Math.PI);            // 0, 30, 60, 90, 120, 150
     planes.push(p);
   }
   return mergeGeometries(planes);

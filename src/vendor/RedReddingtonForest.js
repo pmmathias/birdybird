@@ -27,7 +27,7 @@ import { createBarkNodeMaterial, createLeafNodeMaterial } from './RedReddingtonF
 
 export const DEFAULT_CONFIG = {
   // Forest
-  TREE_COUNT: 3000,
+  TREE_COUNT: 4500,
   FOREST_RADIUS: 80,
   CLEAR_RADIUS: 5,
 
