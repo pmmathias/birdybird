@@ -72,60 +72,38 @@ function generateConiferTexture({ snowy = false, seed = 0 } = {}) {
   const baseY = H - 70;
   const baseHalfWidth = W * 0.46;
 
-  // 2. Solid dark fir silhouette — clean continuous shape so the tree
-  // reads as a tree from any distance. Subtle wavy outline (no
-  // pancake-tier rings) so individual branches blend into a fluffy
-  // mass.
-  ctx.fillStyle = snowy ? '#202830' : '#0d2812';
-  ctx.beginPath();
-  const outlinePoints = 60;
-  for (let i = 0; i <= outlinePoints; i++) {
-    const t = i / outlinePoints;
-    const y = apexY + t * (baseY - apexY);
-    const half = baseHalfWidth * (0.05 + Math.pow(t, 1.08) * 0.95);
-    // Wavy edge with high-frequency micro-roughness (branch tips)
-    const wave = Math.sin(t * 24 + seed) * 6 + Math.sin(t * 9 + seed * 2) * 9;
-    const x = W / 2 - half + wave;
-    if (i === 0) ctx.moveTo(W / 2, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.lineTo(W / 2 - 18, baseY + 8);
-  ctx.lineTo(W / 2 + 18, baseY + 8);
-  for (let i = outlinePoints; i >= 0; i--) {
-    const t = i / outlinePoints;
-    const y = apexY + t * (baseY - apexY);
-    const half = baseHalfWidth * (0.05 + Math.pow(t, 1.08) * 0.95);
-    const wave = Math.sin(t * 26 + seed * 3) * 6 + Math.sin(t * 11 + seed * 4) * 9;
-    const x = W / 2 + half - wave;
-    ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  // 3. Mass of needle strokes — many small lines drawn ALL ACROSS the
-  // silhouette so the surface reads as a continuous fuzzy fir mass
-  // rather than discrete branch shelves. Each stroke has a random
-  // outward-and-down direction, varying colour for highlights/shadows.
-  const needleCount = 8000;
+  // No solid silhouette underneath — the gaps between needle strokes
+  // need to stay transparent so the background shows through (Mathias's
+  // "alpha halt" feedback). Only the strokes themselves are opaque;
+  // alphaTest:0.5 discards everything else cleanly.
+  //
+  // Mass of needle strokes covering a triangular silhouette area. Each
+  // stroke has an outward + downward direction proportional to its
+  // distance from the trunk (drooping branch tips). Density is bumped
+  // because we no longer have a fill to lean on for tree-shape reading.
+  const needleCount = 14000;
   for (let n = 0; n < needleCount; n++) {
     const t = rand();
     const y = apexY + t * (baseY - apexY);
     const half = baseHalfWidth * (0.05 + Math.pow(t, 1.08) * 0.95);
-    // Bias toward edges (more needles near silhouette outline) since
-    // that's what the eye picks up at distance.
-    const xBias = (rand() < 0.4) ? (rand() ** 0.4) : (rand() ** 1.5);
+    // Density falls off near the silhouette edge so the tree's outline
+    // looks naturally feathery (sparse needles fading to transparency)
+    // instead of a hard silhouette boundary. Bias = rand^1.0 → linear
+    // toward centre, bias = rand^2 → pushed toward centre. Mix gives a
+    // dense core + soft edges.
+    const xBias = (rand() < 0.6) ? (rand() ** 0.7) : (rand() ** 2.0);
     const xSign = rand() < 0.5 ? -1 : 1;
-    const x = W / 2 + xSign * xBias * half * 0.96;
+    // Slight asymmetry so the silhouette isn't perfectly mirrored
+    const wobble = Math.sin(y * 0.04 + seed) * 4;
+    const x = W / 2 + wobble + xSign * xBias * half * 0.96;
+    if (Math.abs(x - W / 2 - wobble) > half) continue;
 
-    // Stay within the wavy silhouette
-    const wave = Math.sin(t * 24 + seed) * 6 + Math.sin(t * 9 + seed * 2) * 9;
-    const localHalf = half - Math.abs(wave) - 2;
-    if (Math.abs(x - W / 2) > localHalf) continue;
-
-    // Direction: outward (from centre column) and slightly downward.
-    // Outermost needles tilt downward harder (drooping tips).
-    const dirOutward = (x - W / 2) / Math.max(1, localHalf);
-    const ang = Math.atan2(0.55 + Math.abs(dirOutward) * 0.5, dirOutward * 1.6);
+    // Direction: outward + slightly downward. Outermost needles tilt
+    // down harder (drooping tips). Use the actual signed offset so
+    // strokes always point away from the trunk axis.
+    const offset = x - W / 2 - wobble;
+    const dirOutward = offset / Math.max(1, half);
+    const ang = Math.atan2(0.5 + Math.abs(dirOutward) * 0.55, dirOutward * 1.6);
     const angJitter = (rand() - 0.5) * 0.55;
     const len = 4 + rand() * 7;
     const tipX = x + Math.cos(ang + angJitter) * len;
@@ -134,15 +112,14 @@ function generateConiferTexture({ snowy = false, seed = 0 } = {}) {
     let stroke;
     if (snowy) {
       const r = rand();
-      if (r < 0.50) stroke = `hsla(${205 + rand() * 25}, 12%, ${85 + rand() * 12}%, 0.92)`;       // bright snow
-      else if (r < 0.78) stroke = `hsla(${205 + rand() * 20}, 8%, ${60 + rand() * 18}%, 0.85)`;   // mid grey-blue
-      else stroke = `hsla(${130 + rand() * 30}, 30%, ${20 + rand() * 12}%, 0.8)`;                // dark green peeking through
+      if (r < 0.55)        stroke = `hsla(${205 + rand() * 25}, 12%, ${85 + rand() * 12}%, 0.92)`;   // bright snow
+      else if (r < 0.85)   stroke = `hsla(${198 + rand() * 22}, 10%, ${66 + rand() * 16}%, 0.9)`;    // mid grey-blue
+      else                 stroke = `hsla(${130 + rand() * 28}, 38%, ${30 + rand() * 12}%, 0.85)`;   // green peeking through
     } else {
       const r = rand();
-      if (r < 0.42)       stroke = `hsla(${100 + rand() * 18}, 60%, ${24 + rand() * 12}%, 0.88)`;  // mid green
-      else if (r < 0.72)  stroke = `hsla(${82 + rand() * 28}, 65%, ${38 + rand() * 18}%, 0.9)`;    // bright/yellow-green
-      else if (r < 0.90)  stroke = `hsla(${110 + rand() * 14}, 55%, ${9 + rand() * 8}%, 0.85)`;    // very dark shadow
-      else                stroke = `hsla(${28 + rand() * 14}, 50%, ${22 + rand() * 14}%, 0.7)`;    // brown bark peek
+      if (r < 0.50)        stroke = `hsla(${100 + rand() * 18}, 60%, ${28 + rand() * 14}%, 0.92)`;   // mid green
+      else if (r < 0.85)   stroke = `hsla(${82 + rand() * 28}, 65%, ${42 + rand() * 18}%, 0.92)`;    // bright/yellow-green
+      else                 stroke = `hsla(${110 + rand() * 14}, 50%, ${18 + rand() * 12}%, 0.88)`;   // mid-dark shadow
     }
     ctx.strokeStyle = stroke;
     ctx.lineWidth = 1.3 + rand() * 0.6;
