@@ -131,7 +131,21 @@ export async function buildWorld(scene, renderer) {
     // the world looks empty until you fly 500m.
     for (const seed of [{ x: 120, z: 80 }, { x: -140, z: 60 }, { x: 60, z: -130 }]) {
       const y = getTerrainHeight(seed.x, seed.z, arcs);
-      if (y > WATER_LEVEL + 4 && y < 80) centers.push(seed);
+      if (y > WATER_LEVEL + 4 && y < 110) centers.push(seed);
+    }
+
+    // Try to seed at least one alpine cluster (>70 m) so conifers
+    // actually appear on screen. Sweep the world for a high-altitude
+    // pocket; first hit wins.
+    let alpineSeeded = false;
+    for (let s = 0; s < 80 && !alpineSeeded; s++) {
+      const x = (Math.random() * 2 - 1) * sampleRadius;
+      const z = (Math.random() * 2 - 1) * sampleRadius;
+      const y = getTerrainHeight(x, z, arcs);
+      if (y > 75 && y < 110) {
+        centers.push({ x, z });
+        alpineSeeded = true;
+      }
     }
 
     let attempts = 0;
@@ -140,7 +154,9 @@ export async function buildWorld(scene, renderer) {
       const x = (Math.random() * 2 - 1) * sampleRadius;
       const z = (Math.random() * 2 - 1) * sampleRadius;
       const y = getTerrainHeight(x, z, arcs);
-      if (y < WATER_LEVEL + 4 || y > 80) continue;
+      // Allow trees all the way up to 110 m so the snow-line conifer
+      // band (90-100 m) actually gets populated.
+      if (y < WATER_LEVEL + 4 || y > 110) continue;
       // Keep some min distance between clusters so they don't merge
       let tooClose = false;
       for (const c of centers) {
@@ -182,7 +198,7 @@ export async function buildWorld(scene, renderer) {
       treePositions: positions,
       useWebGPU: !!renderer.isWebGPURenderer,
       groundHeightFn: (x, z) => getTerrainHeight(x, z, arcs),
-      groundFilterFn: (x, y, z) => y > WATER_LEVEL + 2 && y < 90,
+      groundFilterFn: (x, y, z) => y > WATER_LEVEL + 2 && y < 115,
       config: {
         TRUNK_LENGTH_MIN: 10,
         TRUNK_LENGTH_MAX: 18,
