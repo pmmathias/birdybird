@@ -267,13 +267,16 @@ export function buildStackConeConifers(positions, arcs) {
     const sc = new THREE.Vector3();
     for (let i = 0; i < slots.length; i++) {
       const s = slots[i];
-      // 9-15 m tall; width ~half height for a slim fir silhouette
-      const h = 9 + Math.random() * 6;
-      const w = h * 0.55;
-      pos.set(s.x, s.y - 0.5, s.z);  // sink the base ½ m so the trunk
-                                     // visually meets the terrain
+      // Wide independent variance in height + width: a few young
+      // saplings (8 m) all the way up to monumental old firs (24 m),
+      // with width ranging 0.4×–0.75× height so individual trees read
+      // as different ages / species rather than uniform clones.
+      const h = 8 + Math.random() * 16;
+      const widthRatio = 0.4 + Math.random() * 0.35;
+      const w = h * widthRatio;
+      pos.set(s.x, s.y - 0.5, s.z);
       quat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
-      sc.set(w, h, w);                // independent X/Y scale: x = width
+      sc.set(w, h, w);
       matrix.compose(pos, quat, sc);
       mesh.setMatrixAt(i, matrix);
     }
@@ -300,9 +303,10 @@ export function sampleConiferPositions(arcs, count) {
   const positions = [];
   const sampleRadius = WORLD_HALF * 0.85;
 
-  // Pick cluster centres on alpine ground first. Aim for ~30 trees per
-  // cluster so the player encounters small forests on mountain slopes.
-  const treesPerCluster = 30;
+  // Pick cluster centres on alpine ground first. ~70 trees per cluster
+  // so the player encounters proper fir forests on mountain slopes
+  // rather than thin patches.
+  const treesPerCluster = 70;
   const clusterCount = Math.max(3, Math.round(count / treesPerCluster));
   const centres = [];
   let attempts = 0;

@@ -430,7 +430,7 @@ export async function buildWorld(scene, renderer) {
   // Independent of the L-system forest so we get cheap, clearly-shaped
   // fir trees. Two draw calls total regardless of conifer count.
   console.time('Conifers');
-  const coniferPositions = sampleConiferPositions(arcs, 220);
+  const coniferPositions = sampleConiferPositions(arcs, 500);
   const conifers = buildStackConeConifers(coniferPositions, arcs);
   scene.add(conifers);
   console.timeEnd('Conifers');
