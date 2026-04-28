@@ -38,8 +38,8 @@ export const ALPINE_ZONE_HIGH = 145;
  * @returns {THREE.CanvasTexture}
  */
 function generateConiferTexture({ snowy = false, seed = 0 } = {}) {
-  const W = 256;
-  const H = 512;
+  const W = 512;
+  const H = 1024;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -55,133 +55,115 @@ function generateConiferTexture({ snowy = false, seed = 0 } = {}) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  // 1. Trunk — visible at bottom only (top of trunk hidden by foliage)
-  const trunkTop = H - 60;
-  const trunkBot = H - 4;
-  const trunkW = 14;
+  // 1. Trunk — visible only at the bottom; foliage skirt covers the rest
+  const trunkTop = H - 110;
+  const trunkBot = H - 8;
+  const trunkW = 28;
   const trunkX = W / 2 - trunkW / 2;
   const trunkGrd = ctx.createLinearGradient(trunkX, 0, trunkX + trunkW, 0);
-  trunkGrd.addColorStop(0, '#2a1808');
-  trunkGrd.addColorStop(0.5, '#5a3818');
-  trunkGrd.addColorStop(1, '#2a1808');
+  trunkGrd.addColorStop(0, '#231408');
+  trunkGrd.addColorStop(0.4, '#5b3a1a');
+  trunkGrd.addColorStop(0.7, '#3a2410');
+  trunkGrd.addColorStop(1, '#180c04');
   ctx.fillStyle = trunkGrd;
   ctx.fillRect(trunkX, trunkTop, trunkW, trunkBot - trunkTop);
 
-  const apexY = 18;
-  const baseY = H - 40;
-  const baseHalfWidth = W * 0.45;
+  const apexY = 30;
+  const baseY = H - 70;
+  const baseHalfWidth = W * 0.46;
 
-  // 2. Solid silhouette — a clean fir-tree outline filled with deep
-  // green. Gives a continuous shape so the tree reads as a tree from
-  // any distance (the previous "scattered clusters" approach left
-  // alpha gaps that looked like a sparse leafy bush).
-  ctx.fillStyle = snowy ? '#2c3a40' : '#1a3d1e';
+  // 2. Solid dark fir silhouette — clean continuous shape so the tree
+  // reads as a tree from any distance. Subtle wavy outline (no
+  // pancake-tier rings) so individual branches blend into a fluffy
+  // mass.
+  ctx.fillStyle = snowy ? '#202830' : '#0d2812';
   ctx.beginPath();
-  const tierCount = 14;
-  // Build outline: apex → down the left side via tier points → across
-  // the bottom → up the right side.
-  ctx.moveTo(W / 2, apexY);
-  for (let i = 1; i <= tierCount; i++) {
-    const t = i / tierCount;
+  const outlinePoints = 60;
+  for (let i = 0; i <= outlinePoints; i++) {
+    const t = i / outlinePoints;
     const y = apexY + t * (baseY - apexY);
-    // Wavy outline: each tier sticks out slightly more than the one
-    // above, with a small zigzag for "branch tip" silhouette.
-    const half = baseHalfWidth * (0.08 + Math.pow(t, 1.1) * 0.92);
-    const zig = (i % 2 === 0) ? -2 : 4;
-    ctx.lineTo(W / 2 - half - zig, y);
+    const half = baseHalfWidth * (0.05 + Math.pow(t, 1.08) * 0.95);
+    // Wavy edge with high-frequency micro-roughness (branch tips)
+    const wave = Math.sin(t * 24 + seed) * 6 + Math.sin(t * 9 + seed * 2) * 9;
+    const x = W / 2 - half + wave;
+    if (i === 0) ctx.moveTo(W / 2, y);
+    else ctx.lineTo(x, y);
   }
-  ctx.lineTo(W / 2 - 25, baseY + 6);  // soft skirt at base
-  ctx.lineTo(W / 2 + 25, baseY + 6);
-  for (let i = tierCount; i >= 1; i--) {
-    const t = i / tierCount;
+  ctx.lineTo(W / 2 - 18, baseY + 8);
+  ctx.lineTo(W / 2 + 18, baseY + 8);
+  for (let i = outlinePoints; i >= 0; i--) {
+    const t = i / outlinePoints;
     const y = apexY + t * (baseY - apexY);
-    const half = baseHalfWidth * (0.08 + Math.pow(t, 1.1) * 0.92);
-    const zig = (i % 2 === 0) ? -2 : 4;
-    ctx.lineTo(W / 2 + half + zig, y);
+    const half = baseHalfWidth * (0.05 + Math.pow(t, 1.08) * 0.95);
+    const wave = Math.sin(t * 26 + seed * 3) * 6 + Math.sin(t * 11 + seed * 4) * 9;
+    const x = W / 2 + half - wave;
+    ctx.lineTo(x, y);
   }
   ctx.closePath();
   ctx.fill();
 
-  // 3. Branch detail layer — many short horizontal lines representing
-  // individual fir branches. Drawn with darker green for the under-side
-  // shadow + lighter green stipples on top for needle highlights.
-  for (let i = 0; i < 220; i++) {
+  // 3. Mass of needle strokes — many small lines drawn ALL ACROSS the
+  // silhouette so the surface reads as a continuous fuzzy fir mass
+  // rather than discrete branch shelves. Each stroke has a random
+  // outward-and-down direction, varying colour for highlights/shadows.
+  const needleCount = 8000;
+  for (let n = 0; n < needleCount; n++) {
     const t = rand();
     const y = apexY + t * (baseY - apexY);
-    const half = baseHalfWidth * (0.08 + Math.pow(t, 1.1) * 0.92);
-    const side = rand() < 0.5 ? -1 : 1;
-    const startX = W / 2 + side * (rand() * half * 0.3);
-    const len = (half - Math.abs(startX - W / 2)) * (0.6 + rand() * 0.4);
-    const endX = startX + side * len;
+    const half = baseHalfWidth * (0.05 + Math.pow(t, 1.08) * 0.95);
+    // Bias toward edges (more needles near silhouette outline) since
+    // that's what the eye picks up at distance.
+    const xBias = (rand() < 0.4) ? (rand() ** 0.4) : (rand() ** 1.5);
+    const xSign = rand() < 0.5 ? -1 : 1;
+    const x = W / 2 + xSign * xBias * half * 0.96;
 
-    // Underside shadow: darker thin curve sloping slightly downward
-    ctx.strokeStyle = snowy ? 'rgba(40,55,70,0.55)' : 'rgba(8,22,10,0.6)';
-    ctx.lineWidth = 1.5;
+    // Stay within the wavy silhouette
+    const wave = Math.sin(t * 24 + seed) * 6 + Math.sin(t * 9 + seed * 2) * 9;
+    const localHalf = half - Math.abs(wave) - 2;
+    if (Math.abs(x - W / 2) > localHalf) continue;
+
+    // Direction: outward (from centre column) and slightly downward.
+    // Outermost needles tilt downward harder (drooping tips).
+    const dirOutward = (x - W / 2) / Math.max(1, localHalf);
+    const ang = Math.atan2(0.55 + Math.abs(dirOutward) * 0.5, dirOutward * 1.6);
+    const angJitter = (rand() - 0.5) * 0.55;
+    const len = 4 + rand() * 7;
+    const tipX = x + Math.cos(ang + angJitter) * len;
+    const tipY = y + Math.sin(ang + angJitter) * len;
+
+    let stroke;
+    if (snowy) {
+      const r = rand();
+      if (r < 0.50) stroke = `hsla(${205 + rand() * 25}, 12%, ${85 + rand() * 12}%, 0.92)`;       // bright snow
+      else if (r < 0.78) stroke = `hsla(${205 + rand() * 20}, 8%, ${60 + rand() * 18}%, 0.85)`;   // mid grey-blue
+      else stroke = `hsla(${130 + rand() * 30}, 30%, ${20 + rand() * 12}%, 0.8)`;                // dark green peeking through
+    } else {
+      const r = rand();
+      if (r < 0.42)       stroke = `hsla(${100 + rand() * 18}, 60%, ${24 + rand() * 12}%, 0.88)`;  // mid green
+      else if (r < 0.72)  stroke = `hsla(${82 + rand() * 28}, 65%, ${38 + rand() * 18}%, 0.9)`;    // bright/yellow-green
+      else if (r < 0.90)  stroke = `hsla(${110 + rand() * 14}, 55%, ${9 + rand() * 8}%, 0.85)`;    // very dark shadow
+      else                stroke = `hsla(${28 + rand() * 14}, 50%, ${22 + rand() * 14}%, 0.7)`;    // brown bark peek
+    }
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.3 + rand() * 0.6;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(startX, y + 1);
-    ctx.lineTo(endX, y + 4 + rand() * 3);
+    ctx.moveTo(x, y);
+    ctx.lineTo(tipX, tipY);
     ctx.stroke();
   }
 
-  // 4. Needle highlights — many tiny dots/strokes scattered across the
-  // silhouette so the surface reads as bumpy needles rather than a
-  // flat shape.
-  for (let i = 0; i < 1100; i++) {
-    const t = rand();
-    const y = apexY + t * (baseY - apexY);
-    const half = baseHalfWidth * (0.08 + Math.pow(t, 1.1) * 0.92);
-    // Stay inside silhouette
-    const x = W / 2 + (rand() * 2 - 1) * half * 0.95;
-    let r, g, b, a;
-    if (snowy) {
-      // Snowy: alternating frosted-white and dark-green-shadow stipples
-      if (rand() < 0.55) {
-        r = 230 + rand() * 25;
-        g = 235 + rand() * 20;
-        b = 240 + rand() * 15;
-        a = 0.85 + rand() * 0.15;
-      } else {
-        r = 30 + rand() * 25;
-        g = 55 + rand() * 25;
-        b = 40 + rand() * 20;
-        a = 0.7;
-      }
-    } else {
-      const tier = rand();
-      if (tier < 0.45) {           // mid green needle
-        r = 35 + rand() * 25;
-        g = 75 + rand() * 35;
-        b = 35 + rand() * 18;
-        a = 0.85;
-      } else if (tier < 0.75) {    // bright sun-lit needle
-        r = 80 + rand() * 50;
-        g = 140 + rand() * 50;
-        b = 55 + rand() * 30;
-        a = 0.9;
-      } else {                      // very dark shadow needle
-        r = 8 + rand() * 12;
-        g = 28 + rand() * 18;
-        b = 12 + rand() * 14;
-        a = 0.9;
-      }
-    }
-    ctx.fillStyle = `rgba(${r | 0}, ${g | 0}, ${b | 0}, ${a})`;
-    // Tiny vertical stroke (1×3) — reads as a single needle from a
-    // distance, much more "fir" than a round dot.
-    ctx.fillRect(x | 0, y | 0, 1, 2 + Math.floor(rand() * 2));
-  }
-
-  // 5. Snow caps on the snowy variant — thicker bright accents on
-  // horizontal-ish branch tops.
+  // 4. Snow caps on horizontal-ish surfaces (snowy variant only)
   if (snowy) {
-    for (let i = 0; i < 90; i++) {
+    const capCount = 240;
+    for (let i = 0; i < capCount; i++) {
       const t = 0.05 + rand() * 0.92;
       const y = apexY + t * (baseY - apexY);
-      const half = baseHalfWidth * (0.08 + Math.pow(t, 1.1) * 0.92);
-      const x = W / 2 + (rand() * 2 - 1) * half * 0.9;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      const half = baseHalfWidth * (0.05 + Math.pow(t, 1.08) * 0.95);
+      const x = W / 2 + (rand() * 2 - 1) * half * 0.92;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.7 + rand() * 0.3})`;
       ctx.beginPath();
-      ctx.ellipse(x, y, 4 + rand() * 6, 1.8 + rand() * 2.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, y, 3 + rand() * 5, 1.5 + rand() * 2, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
