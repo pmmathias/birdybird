@@ -18,14 +18,16 @@ const target = await page.evaluate(() => {
   const scene = window.__scene;
   const conifers = scene.getObjectByName('conifer-forest');
   if (!conifers) return { error: 'no conifers' };
-  const trunkMesh = conifers.getObjectByName('conifer-trunks');
-  if (!trunkMesh || trunkMesh.count === 0) return { error: 'no conifer instances' };
-  const arr = trunkMesh.instanceMatrix.array;
-  // Pick a middle instance (not the first, which might be on an edge)
-  const i = Math.floor(trunkMesh.count / 2);
+  // Find any InstancedMesh under the conifer-forest group
+  let mesh = null;
+  conifers.traverse((o) => { if (!mesh && o.isInstancedMesh && o.count > 0) mesh = o; });
+  if (!mesh) return { error: 'no conifer instances' };
+  const arr = mesh.instanceMatrix.array;
+  const i = Math.floor(mesh.count / 2);
   return {
     best: { x: arr[i*16+12], y: arr[i*16+13], z: arr[i*16+14] },
-    count: trunkMesh.count,
+    count: mesh.count,
+    name: mesh.name,
   };
 });
 console.log('target:', JSON.stringify(target));
