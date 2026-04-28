@@ -112,14 +112,17 @@ function generateConiferTexture({ snowy = false, seed = 0 } = {}) {
     let stroke;
     if (snowy) {
       const r = rand();
-      if (r < 0.55)        stroke = `hsla(${205 + rand() * 25}, 12%, ${85 + rand() * 12}%, 0.92)`;   // bright snow
-      else if (r < 0.85)   stroke = `hsla(${198 + rand() * 22}, 10%, ${66 + rand() * 16}%, 0.9)`;    // mid grey-blue
-      else                 stroke = `hsla(${130 + rand() * 28}, 38%, ${30 + rand() * 12}%, 0.85)`;   // green peeking through
+      if (r < 0.55)        stroke = `hsla(${205 + rand() * 25}, 12%, ${82 + rand() * 12}%, 0.92)`;   // bright snow
+      else if (r < 0.85)   stroke = `hsla(${198 + rand() * 22}, 10%, ${56 + rand() * 16}%, 0.9)`;    // mid grey-blue
+      else                 stroke = `hsla(${130 + rand() * 28}, 42%, ${20 + rand() * 10}%, 0.88)`;   // dark green peeking through
     } else {
+      // Darker overall fir palette — previous values rendered too bright
+      // and saturated. Mid stays the dominant tone, bright is muted, dark
+      // pulls the average down for proper deep-forest feel.
       const r = rand();
-      if (r < 0.50)        stroke = `hsla(${100 + rand() * 18}, 60%, ${28 + rand() * 14}%, 0.92)`;   // mid green
-      else if (r < 0.85)   stroke = `hsla(${82 + rand() * 28}, 65%, ${42 + rand() * 18}%, 0.92)`;    // bright/yellow-green
-      else                 stroke = `hsla(${110 + rand() * 14}, 50%, ${18 + rand() * 12}%, 0.88)`;   // mid-dark shadow
+      if (r < 0.55)        stroke = `hsla(${108 + rand() * 14}, 55%, ${17 + rand() * 8}%, 0.92)`;    // mid green (now darker)
+      else if (r < 0.82)   stroke = `hsla(${90 + rand() * 24}, 55%, ${28 + rand() * 10}%, 0.9)`;     // muted highlight
+      else                 stroke = `hsla(${118 + rand() * 12}, 60%, ${10 + rand() * 6}%, 0.9)`;     // deep shadow
     }
     ctx.strokeStyle = stroke;
     ctx.lineWidth = 1.3 + rand() * 0.6;
@@ -160,21 +163,21 @@ function generateConiferTexture({ snowy = false, seed = 0 } = {}) {
   return tex;
 }
 
-// Crossed-billboard geometry: two planes meeting at right angles, baked
-// once and reused across all conifer instances. Plane base sits at y=0
-// so per-instance Y = ground.
+// Crossed-billboard geometry: FOUR planes at 0°, 45°, 90°, 135° around
+// the vertical axis — gives 8 visible silhouette faces from any
+// horizontal angle so the tree always reads as 3D, regardless of
+// approach direction. Two planes (the previous version) showed an
+// obvious flat side at 45° angles. Cost: 8 triangles per tree (was 4)
+// — still trivial at 500 trees = 4000 triangles total.
 const _crossedBillboardGeo = (() => {
-  // Plane A: facing +Z (so a viewer looking from +Z sees it face-on).
-  // PlaneGeometry default lies in XY with normal +Z — perfect.
-  const planeA = new THREE.PlaneGeometry(1, 2, 1, 1);
-  planeA.translate(0, 1.0, 0);     // base at y=0, top at y=2
-
-  // Plane B: rotated 90° around Y, perpendicular to A.
-  const planeB = new THREE.PlaneGeometry(1, 2, 1, 1);
-  planeB.translate(0, 1.0, 0);
-  planeB.rotateY(Math.PI / 2);
-
-  return mergeGeometries([planeA, planeB]);
+  const planes = [];
+  for (let i = 0; i < 4; i++) {
+    const p = new THREE.PlaneGeometry(1, 2, 1, 1);
+    p.translate(0, 1.0, 0);                 // base at y=0, top at y=2
+    p.rotateY((i / 4) * Math.PI);            // 0, 45, 90, 135
+    planes.push(p);
+  }
+  return mergeGeometries(planes);
 })();
 
 /**
