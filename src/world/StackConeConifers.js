@@ -113,16 +113,14 @@ function generateConiferTexture({ snowy = false, seed = 0 } = {}) {
     if (snowy) {
       const r = rand();
       if (r < 0.55)        stroke = `hsla(${205 + rand() * 25}, 12%, ${82 + rand() * 12}%, 0.92)`;   // bright snow
-      else if (r < 0.85)   stroke = `hsla(${198 + rand() * 22}, 10%, ${56 + rand() * 16}%, 0.9)`;    // mid grey-blue
-      else                 stroke = `hsla(${130 + rand() * 28}, 42%, ${20 + rand() * 10}%, 0.88)`;   // dark green peeking through
+      else if (r < 0.85)   stroke = `hsla(${198 + rand() * 22}, 10%, ${50 + rand() * 14}%, 0.9)`;    // mid grey-blue
+      else                 stroke = `hsla(${130 + rand() * 28}, 50%, ${12 + rand() * 8}%, 0.92)`;    // very dark green peeking through
     } else {
-      // Darker overall fir palette — previous values rendered too bright
-      // and saturated. Mid stays the dominant tone, bright is muted, dark
-      // pulls the average down for proper deep-forest feel.
+      // Even darker fir palette — proper deep-forest dark green.
       const r = rand();
-      if (r < 0.55)        stroke = `hsla(${108 + rand() * 14}, 55%, ${17 + rand() * 8}%, 0.92)`;    // mid green (now darker)
-      else if (r < 0.82)   stroke = `hsla(${90 + rand() * 24}, 55%, ${28 + rand() * 10}%, 0.9)`;     // muted highlight
-      else                 stroke = `hsla(${118 + rand() * 12}, 60%, ${10 + rand() * 6}%, 0.9)`;     // deep shadow
+      if (r < 0.55)        stroke = `hsla(${108 + rand() * 14}, 60%, ${10 + rand() * 7}%, 0.95)`;    // dominant mid (very dark)
+      else if (r < 0.82)   stroke = `hsla(${88 + rand() * 24}, 55%, ${20 + rand() * 8}%, 0.9)`;     // muted highlight
+      else                 stroke = `hsla(${118 + rand() * 12}, 65%, ${5 + rand() * 5}%, 0.92)`;     // near-black shadow
     }
     ctx.strokeStyle = stroke;
     ctx.lineWidth = 1.3 + rand() * 0.6;
@@ -205,65 +203,77 @@ export function buildStackConeConifers(positions, arcs) {
   }
   if (greenSlots.length === 0 && snowySlots.length === 0) return group;
 
-  const greenTex = generateConiferTexture({ snowy: false, seed: 1 });
-  const snowyTex = generateConiferTexture({ snowy: true,  seed: 2 });
-  // alphaTest 0.3 (was 0.5): with no mipmaps the texel alpha is full
-  // 0.85-0.92, but the renderer's bilinear filter still mixes
-  // adjacent texels at oblique angles. A 0.3 threshold keeps softly-
-  // sampled needle edges visible while still discarding the truly
-  // empty inter-needle pixels.
-  const greenMat = new THREE.MeshBasicMaterial({
-    map: greenTex,
+  // Three texture variants per biome (different seeds) so neighbouring
+  // trees in a cluster don't look like identical clones. Each variant
+  // gets its own InstancedMesh; trees are randomly assigned at build.
+  const greenTextures = [1, 7, 13].map((seed) => generateConiferTexture({ snowy: false, seed }));
+  const snowyTextures = [2, 9, 19].map((seed) => generateConiferTexture({ snowy: true,  seed }));
+  const matOpts = {
     transparent: false,
     alphaTest: 0.3,
     side: THREE.DoubleSide,
     fog: true,
-  });
-  const snowyMat = new THREE.MeshBasicMaterial({
-    map: snowyTex,
-    transparent: false,
-    alphaTest: 0.3,
-    side: THREE.DoubleSide,
-    fog: true,
-  });
+  };
+  const greenMats = greenTextures.map((map) => new THREE.MeshBasicMaterial({ ...matOpts, map }));
+  const snowyMats = snowyTextures.map((map) => new THREE.MeshBasicMaterial({ ...matOpts, map }));
 
-  function buildMesh(slots, mat, name) {
-    if (slots.length === 0) return null;
-    const mesh = new THREE.InstancedMesh(_crossedBillboardGeo, mat, slots.length);
-    mesh.name = name;
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
-    mesh.frustumCulled = false;
-    const matrix = new THREE.Matrix4();
-    const pos = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
-    const sc = new THREE.Vector3();
-    for (let i = 0; i < slots.length; i++) {
-      const s = slots[i];
-      // Wide independent variance in height + width: a few young
-      // saplings (8 m) all the way up to monumental old firs (24 m),
-      // with width ranging 0.4×–0.75× height so individual trees read
-      // as different ages / species rather than uniform clones.
-      const h = 8 + Math.random() * 16;
-      const widthRatio = 0.4 + Math.random() * 0.35;
-      const w = h * widthRatio;
-      pos.set(s.x, s.y - 0.5, s.z);
-      quat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
-      sc.set(w, h, w);
-      matrix.compose(pos, quat, sc);
-      mesh.setMatrixAt(i, matrix);
+  /** Build instances from `slots` distributed across N variant materials. */
+  function buildMeshes(slots, mats, prefix) {
+    if (slots.length === 0) return [];
+    // Bucket each slot to a random texture variant
+    const buckets = mats.map(() => []);
+    for (const s of slots) buckets[Math.floor(Math.random() * mats.length)].push(s);
+    const meshes = [];
+    for (let v = 0; v < mats.length; v++) {
+      const list = buckets[v];
+      if (list.length === 0) continue;
+      const mesh = new THREE.InstancedMesh(_crossedBillboardGeo, mats[v], list.length);
+      mesh.name = `${prefix}-v${v}`;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.frustumCulled = false;
+      const matrix = new THREE.Matrix4();
+      const pos = new THREE.Vector3();
+      const quat = new THREE.Quaternion();
+      const sc = new THREE.Vector3();
+      const TILT_AXIS = new THREE.Vector3();
+      for (let i = 0; i < list.length; i++) {
+        const s = list[i];
+        // Wide independent variance per tree:
+        //   height 5-32 m (saplings up to monumental old firs)
+        //   width  0.30-0.95 × height (slim cypress-y up to wide pyramidal)
+        //   slight random lean (up to ~6°) so the forest doesn't look
+        //   military-perfectly-straight
+        const h = 5 + Math.random() * 27;
+        const widthRatio = 0.30 + Math.random() * 0.65;
+        const w = h * widthRatio;
+        pos.set(s.x, s.y - 0.5, s.z);
+        // Combine yaw rotation with a small random tilt around a
+        // horizontal axis for natural variety.
+        const yaw = Math.random() * Math.PI * 2;
+        const tiltAng = (Math.random() - 0.5) * 0.20;       // ±~6°
+        const tiltDir = Math.random() * Math.PI * 2;
+        TILT_AXIS.set(Math.cos(tiltDir), 0, Math.sin(tiltDir));
+        const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+        const tiltQuat = new THREE.Quaternion().setFromAxisAngle(TILT_AXIS, tiltAng);
+        quat.copy(yawQuat).multiply(tiltQuat);
+        sc.set(w, h, w);
+        matrix.compose(pos, quat, sc);
+        mesh.setMatrixAt(i, matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
+      meshes.push(mesh);
     }
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere();
-    return mesh;
+    return meshes;
   }
 
-  const greenMesh = buildMesh(greenSlots, greenMat, 'conifer-foliage-green');
-  const snowyMesh = buildMesh(snowySlots, snowyMat, 'conifer-foliage-snowy');
-  if (greenMesh) group.add(greenMesh);
-  if (snowyMesh) group.add(snowyMesh);
+  const greenMeshes = buildMeshes(greenSlots, greenMats, 'conifer-green');
+  const snowyMeshes = buildMeshes(snowySlots, snowyMats, 'conifer-snowy');
+  for (const m of greenMeshes) group.add(m);
+  for (const m of snowyMeshes) group.add(m);
 
-  console.log(`Conifers (crossed-billboard): ${greenSlots.length} green + ${snowySlots.length} snowy`);
+  console.log(`Conifers (crossed-billboard): ${greenSlots.length} green + ${snowySlots.length} snowy across ${greenMats.length + snowyMats.length} variants`);
   return group;
 }
 
