@@ -7,6 +7,7 @@ import { getTerrainHeight } from './Terrain.js';
 import { createLandmark } from './Landmarks.js';
 import { createHouses } from './HousePlacer.js';
 import { createHotelResorts } from './HotelResort.js';
+import { buildStackConeConifers, sampleConiferPositions } from './StackConeConifers.js';
 import { UnderwaterWorld } from './Underwater.js';
 import { Octree } from '../spatial/Octree.js';
 import { FrustumCuller } from '../spatial/FrustumCuller.js';
@@ -60,7 +61,7 @@ export async function buildWorld(scene, renderer) {
     waterLevel: WATER_LEVEL,
     sandEnd: WATER_LEVEL + 8,
     grassEnd: 35,
-    rockEnd: 95,
+    rockEnd: 110,    // snow line raised so the conifer band has space
     sunDirection: sunDir,
     fogColor,
     fogNear: FOG_NEAR,
@@ -424,6 +425,15 @@ export async function buildWorld(scene, renderer) {
   }
   scene.add(forest);
   console.timeEnd('Forest');
+
+  // --- Stack-cone conifers (alpine zone, snow-frosted band) ---
+  // Independent of the L-system forest so we get cheap, clearly-shaped
+  // fir trees. Two draw calls total regardless of conifer count.
+  console.time('Conifers');
+  const coniferPositions = sampleConiferPositions(arcs, 220);
+  const conifers = buildStackConeConifers(coniferPositions, arcs);
+  scene.add(conifers);
+  console.timeEnd('Conifers');
 
   /**
    * Rebuild the forest with biome-specific options.

@@ -309,6 +309,8 @@ export class InstancedForest {
     this.leafWobbleY = [];
     this.leafSwayPhase = [];
 
+    // Broadleaf shapes only. Stack-cone conifers (above ALPINE_ZONE)
+    // are built separately in src/world/StackConeConifers.js.
     const treeTypes = [
       { levels: 4, branchAngle: 0.5, lengthFalloff: 0.7, radiusFalloff: 0.55, branches: 3 },
       { levels: 5, branchAngle: 0.4, lengthFalloff: 0.65, radiusFalloff: 0.5, branches: 2 },
@@ -316,28 +318,6 @@ export class InstancedForest {
       { levels: 3, branchAngle: 0.55, lengthFalloff: 0.75, radiusFalloff: 0.58, branches: 3 },
       { levels: 4, branchAngle: 0.48, lengthFalloff: 0.68, radiusFalloff: 0.52, branches: 3 },
     ];
-    // Conifer shape (used at high elevation): tall narrow trunk with
-    // many short, near-horizontal branches whorled along its full
-    // length — child length tapers toward the top, giving the
-    // characteristic Christmas-tree silhouette.
-    const coniferType = {
-      kind: 'conifer',
-      // Single level but FAR more branches — 14 horizontal whorls along
-      // the trunk + 3 leaf clusters each = 42 leaf clusters per tree.
-      // Levels=2 with 6×6 was too heavy on the build (3000 trees ×
-      // potentially 200 conifers × 36 sub-branches × dense leaves =
-      // 60-second build hitch).
-      levels: 1,
-      branchAngle: 1.20,    // ~69° from vertical — slight droop
-      lengthFalloff: 0.62,
-      radiusFalloff: 0.55,
-      branches: 14,
-      startT0: 0.10, startT1: 0.95,
-      taperByPos: true,
-    };
-    // Elevation thresholds — match terrain shader's rockEnd=95 (snow line).
-    const SNOW_LINE = 95;
-    const ALPINE_ZONE = 70;
 
     let placed = 0;
     let attempts = 0;
@@ -369,38 +349,14 @@ export class InstancedForest {
       if (this.groundFilterFn && !this.groundFilterFn(treeX, treeY, treeZ)) continue;
       const treeRotation = rand() * Math.PI * 2;
 
-      // Elevation-aware type + colour:
-      // > snow line: snowy conifer (frosted white-blue needles)
-      // alpine zone: dark-green conifer
-      // else: regular broadleaf, type randomised
-      let treeType, leafHue, leafLightness;
-      if (treeY > ALPINE_ZONE) {
-        treeType = coniferType;
-        if (treeY > SNOW_LINE - 5) {
-          // Snow-frosted: nearly desaturated near-white. _addLeaves
-          // detects "snowy" via leafLightness > 0.85 and overrides
-          // saturation accordingly.
-          leafHue = 0.55;
-          leafLightness = 0.95;
-        } else {
-          leafHue = 0.32 + rand() * 0.05;
-          leafLightness = 0.20 + rand() * 0.08;
-        }
-      } else {
-        const typeIndex = Math.floor(rand() * treeTypes.length);
-        treeType = treeTypes[typeIndex];
-        leafHue = this.config.LEAF_HUE_MIN + rand() * (this.config.LEAF_HUE_MAX - this.config.LEAF_HUE_MIN);
-        leafLightness = this.config.LEAF_LIGHTNESS_MIN + rand() * (this.config.LEAF_LIGHTNESS_MAX - this.config.LEAF_LIGHTNESS_MIN);
-      }
+      const typeIndex = Math.floor(rand() * treeTypes.length);
+      const treeType = treeTypes[typeIndex];
+      const leafHue = this.config.LEAF_HUE_MIN + rand() * (this.config.LEAF_HUE_MAX - this.config.LEAF_HUE_MIN);
+      const leafLightness = this.config.LEAF_LIGHTNESS_MIN + rand() * (this.config.LEAF_LIGHTNESS_MAX - this.config.LEAF_LIGHTNESS_MIN);
 
-      // Conifers are taller than broadleaf trees but trunk thickness
-      // closer to normal so the silhouette isn't a stick.
-      const isConifer = treeType.kind === 'conifer';
-      const treeScale = isConifer ? (0.85 + rand() * 0.7) : (0.6 + rand() * 0.8);
-      const trunkLengthMul = isConifer ? 1.7 : 1.0;
-      const trunkRadiusMul = isConifer ? 0.85 : 1.0;
-      const trunkLength = (this.config.TRUNK_LENGTH_MIN + rand() * (this.config.TRUNK_LENGTH_MAX - this.config.TRUNK_LENGTH_MIN)) * treeScale * trunkLengthMul;
-      const trunkRadius = (this.config.TRUNK_RADIUS_MIN + rand() * (this.config.TRUNK_RADIUS_MAX - this.config.TRUNK_RADIUS_MIN)) * treeScale * trunkRadiusMul;
+      const treeScale = 0.6 + rand() * 0.8;
+      const trunkLength = (this.config.TRUNK_LENGTH_MIN + rand() * (this.config.TRUNK_LENGTH_MAX - this.config.TRUNK_LENGTH_MIN)) * treeScale;
+      const trunkRadius = (this.config.TRUNK_RADIUS_MIN + rand() * (this.config.TRUNK_RADIUS_MAX - this.config.TRUNK_RADIUS_MIN)) * treeScale;
 
       this._currentTreeBaseY = treeY;
       this._generateTree(treeX, treeY, treeZ, treeRotation, treeScale, leafHue, leafLightness, trunkLength, trunkRadius, treeType, rand);
@@ -445,19 +401,7 @@ export class InstancedForest {
     this.branchTreeBaseY.push(this._currentTreeBaseY);
 
     if (level >= treeType.levels - 1) {
-      // Conifers get foliage at multiple points along each branch so the
-      // silhouette reads as fluffy rather than a stick with one bunch
-      // of leaves at the tip. Three clusters per non-trunk branch.
-      if (treeType.kind === 'conifer' && level > 0) {
-        for (const t of [0.45, 0.75, 1.0]) {
-          const clusterPoint = start.clone().lerp(end, t);
-          // Slightly thicker dressing toward the tip
-          const tRadius = topRadius * (1.0 + (1.0 - t) * 0.6);
-          this._addLeaves(clusterPoint, direction, treeScale, leafHue, leafLightness, rand, tRadius, level, treeType.levels, treeType);
-        }
-      } else {
-        this._addLeaves(end, direction, treeScale, leafHue, leafLightness, rand, topRadius, level, treeType.levels, treeType);
-      }
+      this._addLeaves(end, direction, treeScale, leafHue, leafLightness, rand, topRadius, level, treeType.levels);
     }
 
     if (level < treeType.levels) {
@@ -465,10 +409,8 @@ export class InstancedForest {
         ? treeType.branches + Math.floor(rand() * 2)
         : Math.max(1, treeType.branches - Math.floor(level * 0.3));
 
-      // Conifers spread branches all along the trunk; broadleaf trees
-      // keep them clustered in the upper 40-90 % range.
-      const startT0 = treeType.startT0 ?? 0.4;
-      const startT1 = treeType.startT1 ?? 0.9;
+      const startT0 = 0.4;
+      const startT1 = 0.9;
       for (let i = 0; i < numChildren; i++) {
         const twistAngle = (i / numChildren) * Math.PI * 2 + rand() * this.config.TWIST + treeRotation;
         const bendAngle = treeType.branchAngle + (rand() - 0.5) * this.config.BRANCH_ANGLE_VARIANCE * 2;
@@ -487,12 +429,7 @@ export class InstancedForest {
 
         const startT = startT0 + rand() * (startT1 - startT0);
         const childStart = start.clone().lerp(end, startT);
-        // Conifer taper: branches near the top are markedly shorter than
-        // those at the bottom, producing the Christmas-tree silhouette.
-        const taperScale = treeType.taperByPos
-          ? (1.0 - startT * 0.7)   // top branches ~30 %, bottom ~100 %
-          : 1.0;
-        const childLength = length * treeType.lengthFalloff * (0.8 + rand() * 0.4) * taperScale;
+        const childLength = length * treeType.lengthFalloff * (0.8 + rand() * 0.4);
         const childRadius = radius * treeType.radiusFalloff;
 
         this._branch(childStart, childDir, childLength, childRadius, level + 1, treeRotation, treeScale, leafHue, leafLightness, treeType, rand);
@@ -500,19 +437,9 @@ export class InstancedForest {
     }
   }
 
-  _addLeaves(branchEnd, branchDir, treeScale, leafHue, leafLightness, rand, topRadius, level, maxLevel, treeType) {
-    // Conifer needles: many small leaves per cluster, called multiple
-    // times per branch (see _branch) so a single conifer branch ends up
-    // with ~50 small leaves spread along its length — reads as a fluffy
-    // pad of needles rather than a sparse fan of broadleaves.
-    const isConifer = treeType?.kind === 'conifer';
-    // 14 branches × 3 clusters × ~10 leaves = 420 needles per conifer.
-    const baseCount = isConifer
-      ? Math.floor(this.config.LEAF_DENSITY * 2 + rand() * 5)
-      : this.config.LEAF_DENSITY + Math.floor(rand() * 3);
-    const count = baseCount;
-    const sizeMul = isConifer ? 0.55 : 1.0;
-    const size = this.config.LEAF_SIZE * treeScale * sizeMul;
+  _addLeaves(branchEnd, branchDir, treeScale, leafHue, leafLightness, rand, topRadius, level, maxLevel) {
+    const count = this.config.LEAF_DENSITY + Math.floor(rand() * 3);
+    const size = this.config.LEAF_SIZE * treeScale;
     const spread = this.config.LEAF_SPREAD * treeScale;
 
     const perp1 = new THREE.Vector3(1, 0, 0);
@@ -573,16 +500,10 @@ export class InstancedForest {
       this.leafMatrices.push(this._matrix.clone());
 
       // Stronger per-leaf jitter so a single tree shows highlighted +
-      // shadowed leaf variation instead of a uniform mass. Conifer +
-      // snowy leaves get tighter saturation control so they actually
-      // read as snow-frosted needles.
-      const isSnowy  = leafLightness > 0.85;
-      const isPine   = treeType?.kind === 'conifer' && !isSnowy;
-      let h = leafHue + (rand() - 0.5) * (isSnowy ? 0.04 : 0.10);
-      let s = isSnowy ? 0.04 + rand() * 0.08
-            : isPine  ? 0.65 + rand() * 0.15
-            : this.config.LEAF_SATURATION + (rand() - 0.3) * 0.30;
-      let l = leafLightness + (rand() - 0.5) * (isSnowy ? 0.06 : 0.18);
+      // shadowed leaf variation instead of a uniform mass.
+      let h = leafHue + (rand() - 0.5) * 0.10;
+      let s = this.config.LEAF_SATURATION + (rand() - 0.3) * 0.30;
+      let l = leafLightness + (rand() - 0.5) * 0.18;
 
       if (rand() < this.config.LEAF_TINGE_PERCENT) {
         if (rand() < this.config.LEAF_TINGE_YELLOW_CHANCE) {
