@@ -149,15 +149,14 @@ function generateConiferTexture({ snowy = false, seed = 0 } = {}) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = THREE.LinearFilter;
-  // No mipmaps! Mipmap averaging on alpha-tested textures eats the
-  // alpha at distance: a mip level that averages 1 needle pixel
-  // (α≈0.9) with 15 transparent pixels (α=0) yields α≈0.06 — well
-  // below alphaTest=0.5, so the entire distant tree disappears.
-  // LinearFilter keeps full-res sampling; small aliasing risk is
-  // worth not having trees vanish at altitude.
-  tex.minFilter = THREE.LinearFilter;
-  tex.generateMipmaps = false;
-  tex.anisotropy = 1;
+  // Mipmaps RE-ENABLED to kill the under-sampling aliasing on distant
+  // trees. The "trees vanish at distance" issue caused by mip-shrunk
+  // alpha is solved at the material level (alphaToCoverage + adjusted
+  // alphaTest, see below) — this combination gets us crisp close-up
+  // detail AND smooth far-distance sampling without flicker.
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 8;
   return tex;
 }
 
@@ -208,9 +207,19 @@ export function buildStackConeConifers(positions, arcs) {
   // gets its own InstancedMesh; trees are randomly assigned at build.
   const greenTextures = [1, 7, 13].map((seed) => generateConiferTexture({ snowy: false, seed }));
   const snowyTextures = [2, 9, 19].map((seed) => generateConiferTexture({ snowy: true,  seed }));
+  // alphaToCoverage gives MSAA-resolved soft edges on alpha-tested
+  // geometry — solves the dual problem of "discrete cutout aliases at
+  // distance" and "mip-shrunk alpha disappears". MSAA samples per
+  // pixel resolve to per-subpixel coverage, so distant tree silhouettes
+  // soften smoothly instead of flickering.
+  // alphaTest is bumped from 0.3 → 0.5 to compensate for mipmap-
+  // averaged alpha; with A2C the threshold is interpreted as coverage
+  // probability, not a hard cutoff.
   const matOpts = {
-    transparent: false,
-    alphaTest: 0.3,
+    transparent: true,
+    alphaTest: 0.5,
+    alphaToCoverage: true,
+    depthWrite: true,
     side: THREE.DoubleSide,
     fog: true,
   };
