@@ -322,14 +322,18 @@ export class InstancedForest {
     // characteristic Christmas-tree silhouette.
     const coniferType = {
       kind: 'conifer',
+      // Single level but FAR more branches — 14 horizontal whorls along
+      // the trunk + 3 leaf clusters each = 42 leaf clusters per tree.
+      // Levels=2 with 6×6 was too heavy on the build (3000 trees ×
+      // potentially 200 conifers × 36 sub-branches × dense leaves =
+      // 60-second build hitch).
       levels: 1,
-      branchAngle: 1.25,    // ~72° from vertical — slightly less flat so
-                            // branches droop a touch like a real fir
-      lengthFalloff: 0.65,
-      radiusFalloff: 0.55,  // thicker branches so they're actually visible
-      branches: 7,
-      startT0: 0.15, startT1: 0.95,  // branches whorl along the whole trunk
-      taperByPos: true,              // top branches shorter than bottom
+      branchAngle: 1.20,    // ~69° from vertical — slight droop
+      lengthFalloff: 0.62,
+      radiusFalloff: 0.55,
+      branches: 14,
+      startT0: 0.10, startT1: 0.95,
+      taperByPos: true,
     };
     // Elevation thresholds — match terrain shader's rockEnd=95 (snow line).
     const SNOW_LINE = 95;
@@ -502,8 +506,9 @@ export class InstancedForest {
     // with ~50 small leaves spread along its length — reads as a fluffy
     // pad of needles rather than a sparse fan of broadleaves.
     const isConifer = treeType?.kind === 'conifer';
+    // 14 branches × 3 clusters × ~10 leaves = 420 needles per conifer.
     const baseCount = isConifer
-      ? Math.floor(this.config.LEAF_DENSITY * 5 + rand() * 8)
+      ? Math.floor(this.config.LEAF_DENSITY * 2 + rand() * 5)
       : this.config.LEAF_DENSITY + Math.floor(rand() * 3);
     const count = baseCount;
     const sizeMul = isConifer ? 0.55 : 1.0;
