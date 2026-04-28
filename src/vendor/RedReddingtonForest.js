@@ -373,11 +373,14 @@ export class InstancedForest {
       if (treeY > ALPINE_ZONE) {
         treeType = coniferType;
         if (treeY > SNOW_LINE - 5) {
-          leafHue = 0.54 + rand() * 0.06;            // cool blue-cyan for snow tint
-          leafLightness = 0.82 + rand() * 0.12;      // very light, snowy
+          // Snow-frosted: nearly desaturated near-white. _addLeaves
+          // detects "snowy" via leafLightness > 0.85 and overrides
+          // saturation accordingly.
+          leafHue = 0.55;
+          leafLightness = 0.95;
         } else {
-          leafHue = 0.32 + rand() * 0.05;            // deep green needles
-          leafLightness = 0.18 + rand() * 0.08;
+          leafHue = 0.32 + rand() * 0.05;
+          leafLightness = 0.20 + rand() * 0.08;
         }
       } else {
         const typeIndex = Math.floor(rand() * treeTypes.length);
@@ -438,7 +441,19 @@ export class InstancedForest {
     this.branchTreeBaseY.push(this._currentTreeBaseY);
 
     if (level >= treeType.levels - 1) {
-      this._addLeaves(end, direction, treeScale, leafHue, leafLightness, rand, topRadius, level, treeType.levels, treeType);
+      // Conifers get foliage at multiple points along each branch so the
+      // silhouette reads as fluffy rather than a stick with one bunch
+      // of leaves at the tip. Three clusters per non-trunk branch.
+      if (treeType.kind === 'conifer' && level > 0) {
+        for (const t of [0.45, 0.75, 1.0]) {
+          const clusterPoint = start.clone().lerp(end, t);
+          // Slightly thicker dressing toward the tip
+          const tRadius = topRadius * (1.0 + (1.0 - t) * 0.6);
+          this._addLeaves(clusterPoint, direction, treeScale, leafHue, leafLightness, rand, tRadius, level, treeType.levels, treeType);
+        }
+      } else {
+        this._addLeaves(end, direction, treeScale, leafHue, leafLightness, rand, topRadius, level, treeType.levels, treeType);
+      }
     }
 
     if (level < treeType.levels) {
@@ -482,14 +497,16 @@ export class InstancedForest {
   }
 
   _addLeaves(branchEnd, branchDir, treeScale, leafHue, leafLightness, rand, topRadius, level, maxLevel, treeType) {
-    // Conifer needles: small, dense clusters at branch tips so the branch
-    // reads as fluffy needles rather than a few large broadleaves.
+    // Conifer needles: many small leaves per cluster, called multiple
+    // times per branch (see _branch) so a single conifer branch ends up
+    // with ~50 small leaves spread along its length — reads as a fluffy
+    // pad of needles rather than a sparse fan of broadleaves.
     const isConifer = treeType?.kind === 'conifer';
     const baseCount = isConifer
-      ? this.config.LEAF_DENSITY * 4 + Math.floor(rand() * 6)
+      ? Math.floor(this.config.LEAF_DENSITY * 5 + rand() * 8)
       : this.config.LEAF_DENSITY + Math.floor(rand() * 3);
     const count = baseCount;
-    const sizeMul = isConifer ? 0.45 : 1.0;
+    const sizeMul = isConifer ? 0.55 : 1.0;
     const size = this.config.LEAF_SIZE * treeScale * sizeMul;
     const spread = this.config.LEAF_SPREAD * treeScale;
 
@@ -551,10 +568,16 @@ export class InstancedForest {
       this.leafMatrices.push(this._matrix.clone());
 
       // Stronger per-leaf jitter so a single tree shows highlighted +
-      // shadowed leaf variation instead of a uniform mass.
-      let h = leafHue + (rand() - 0.5) * 0.10;
-      let s = this.config.LEAF_SATURATION + (rand() - 0.3) * 0.30;
-      let l = leafLightness + (rand() - 0.5) * 0.18;
+      // shadowed leaf variation instead of a uniform mass. Conifer +
+      // snowy leaves get tighter saturation control so they actually
+      // read as snow-frosted needles.
+      const isSnowy  = leafLightness > 0.85;
+      const isPine   = treeType?.kind === 'conifer' && !isSnowy;
+      let h = leafHue + (rand() - 0.5) * (isSnowy ? 0.04 : 0.10);
+      let s = isSnowy ? 0.04 + rand() * 0.08
+            : isPine  ? 0.65 + rand() * 0.15
+            : this.config.LEAF_SATURATION + (rand() - 0.3) * 0.30;
+      let l = leafLightness + (rand() - 0.5) * (isSnowy ? 0.06 : 0.18);
 
       if (rand() < this.config.LEAF_TINGE_PERCENT) {
         if (rand() < this.config.LEAF_TINGE_YELLOW_CHANCE) {
