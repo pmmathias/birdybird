@@ -148,9 +148,15 @@ function generateConiferTexture({ snowy = false, seed = 0 } = {}) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.anisotropy = 4;
+  // No mipmaps! Mipmap averaging on alpha-tested textures eats the
+  // alpha at distance: a mip level that averages 1 needle pixel
+  // (α≈0.9) with 15 transparent pixels (α=0) yields α≈0.06 — well
+  // below alphaTest=0.5, so the entire distant tree disappears.
+  // LinearFilter keeps full-res sampling; small aliasing risk is
+  // worth not having trees vanish at altitude.
+  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.anisotropy = 1;
   return tex;
 }
 
@@ -198,17 +204,22 @@ export function buildStackConeConifers(positions, arcs) {
 
   const greenTex = generateConiferTexture({ snowy: false, seed: 1 });
   const snowyTex = generateConiferTexture({ snowy: true,  seed: 2 });
+  // alphaTest 0.3 (was 0.5): with no mipmaps the texel alpha is full
+  // 0.85-0.92, but the renderer's bilinear filter still mixes
+  // adjacent texels at oblique angles. A 0.3 threshold keeps softly-
+  // sampled needle edges visible while still discarding the truly
+  // empty inter-needle pixels.
   const greenMat = new THREE.MeshBasicMaterial({
     map: greenTex,
-    transparent: false,    // alphaTest (cheaper than blending)
-    alphaTest: 0.5,
+    transparent: false,
+    alphaTest: 0.3,
     side: THREE.DoubleSide,
     fog: true,
   });
   const snowyMat = new THREE.MeshBasicMaterial({
     map: snowyTex,
     transparent: false,
-    alphaTest: 0.5,
+    alphaTest: 0.3,
     side: THREE.DoubleSide,
     fog: true,
   });
