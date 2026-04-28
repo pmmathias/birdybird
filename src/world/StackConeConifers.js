@@ -292,19 +292,52 @@ export function buildStackConeConifers(positions, arcs) {
 }
 
 /**
- * Sample alpine-elevation positions for conifer placement.
+ * Sample alpine-elevation positions for conifer placement, clustered
+ * into actual forests rather than evenly scattered. Each cluster is
+ * a tight Gaussian spread around a centre on a high-altitude pocket.
  */
 export function sampleConiferPositions(arcs, count) {
   const positions = [];
   const sampleRadius = WORLD_HALF * 0.85;
+
+  // Pick cluster centres on alpine ground first. Aim for ~30 trees per
+  // cluster so the player encounters small forests on mountain slopes.
+  const treesPerCluster = 30;
+  const clusterCount = Math.max(3, Math.round(count / treesPerCluster));
+  const centres = [];
   let attempts = 0;
-  while (positions.length < count && attempts < count * 30) {
+  while (centres.length < clusterCount && attempts < clusterCount * 60) {
     attempts++;
     const x = (Math.random() * 2 - 1) * sampleRadius;
     const z = (Math.random() * 2 - 1) * sampleRadius;
     const y = getTerrainHeight(x, z, arcs);
     if (y < ALPINE_ZONE_LOW || y > ALPINE_ZONE_HIGH) continue;
     if (y < WATER_LEVEL + 4) continue;
+    // Spread centres so clusters don't merge into one big forest
+    let tooClose = false;
+    for (const c of centres) {
+      if (Math.hypot(c.x - x, c.z - z) < 220) { tooClose = true; break; }
+    }
+    if (tooClose) continue;
+    centres.push({ x, z });
+  }
+  if (centres.length === 0) return positions;
+
+  // Scatter trees inside each cluster with a Gaussian-ish radius.
+  for (let i = 0; i < count; i++) {
+    const c = centres[i % centres.length];
+    // Box-Muller for Gaussian-ish spread; ~50 m 1-sigma → tight cluster
+    const u1 = Math.random() || 0.0001;
+    const u2 = Math.random();
+    const r = Math.sqrt(-2 * Math.log(u1)) * 50;
+    const angle = u2 * Math.PI * 2;
+    const x = c.x + Math.cos(angle) * r;
+    const z = c.z + Math.sin(angle) * r;
+    // Drop trees that wandered out of the alpine band (e.g. into a
+    // valley below) — buildStackConeConifers also filters but this
+    // saves a few wasted instances.
+    const y = getTerrainHeight(x, z, arcs);
+    if (y < ALPINE_ZONE_LOW - 10 || y > ALPINE_ZONE_HIGH + 10) continue;
     positions.push({ x, z });
   }
   return positions;
