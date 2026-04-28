@@ -11,7 +11,7 @@ import { WATER_LEVEL } from '../constants.js';
  * batch when fully cleared.
  */
 
-const PICKUP_COUNT   = 14;    // sparser than RING_COUNT (~25); even count → 7+7
+const PICKUP_COUNT   = 26;    // 13 clocks + 13 speed arrows per batch
 const COLLECT_RADIUS = 8;
 const SPAWN_RADIUS   = 800;
 const MIN_HEIGHT     = 18;
