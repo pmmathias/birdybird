@@ -29,6 +29,7 @@ export class MobileInput {
     this._lastAccel = { x: 0, y: 0, z: 0 };
     this._shakeThreshold = 12;
     this._lastShakeTime = 0;
+    this._shakeFreezeUntil = 0;
     this._flapBurst = 0;
     this._flapBurstTotal = 90;
 
@@ -161,6 +162,17 @@ export class MobileInput {
     const rawPitch = shape(normPitch);
     const rawRoll = shape(normRoll);
 
+    // Shake stabilization (see _onMotion): a vigorous flap-shake inevitably
+    // jerks the phone's tilt. Following that jitter swung the nose down, and
+    // since flap thrust points along the live pitch the flap drove the bird
+    // DOWN ("shake → sink"). While a shake is active we hold the last steady
+    // tilt instead of tracking the jerk, so the flap thrust keeps its
+    // intended direction.
+    if (performance.now() < this._shakeFreezeUntil) {
+      this._updateDebug(beta, gamma, dBeta, dGamma, pitchDeg, rollDeg);
+      return;
+    }
+
     // Responsive smoothing
     this._smoothPitch += (rawPitch - this._smoothPitch) * 0.15;
     this._smoothRoll += (rawRoll - this._smoothRoll) * 0.15;
@@ -196,6 +208,9 @@ export class MobileInput {
     if (delta > this._shakeThreshold && now - this._lastShakeTime > 400) {
       this._flapBurst = this._flapBurstTotal;
       this._lastShakeTime = now;
+      // Freeze tilt steering briefly so the shake's own jerk can't redirect
+      // flap thrust (see _onOrientation).
+      this._shakeFreezeUntil = now + 450;
     }
   }
 
