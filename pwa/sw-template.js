@@ -13,7 +13,14 @@ const CACHE_NAME = '__CACHE_NAME__';
 const PRECACHE = __PRECACHE__;
 const INDEX_URL = '__INDEX_URL__';
 const RUNTIME_CACHE = CACHE_NAME + '-runtime';
-const CDN_ORIGINS = ['https://cdn.jsdelivr.net', 'https://storage.googleapis.com'];
+// Third-party asset CDNs the game pulls at runtime: jsdelivr + googleapis
+// (MediaPipe wasm/model) and dl.polyhaven.org (terrain/house diffuse maps).
+// Runtime-cached so they survive offline after one online load.
+const CDN_ORIGINS = [
+  'https://cdn.jsdelivr.net',
+  'https://storage.googleapis.com',
+  'https://dl.polyhaven.org',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
