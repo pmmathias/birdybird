@@ -27,6 +27,7 @@ import {
 	ClampToEdgeWrapping,
 	DataTexture,
 	FloatType,
+	HalfFloatType,
 	LinearFilter,
 	LinearMipMapLinearFilter,
 	NearestFilter,
@@ -108,10 +109,18 @@ constructor(renderer,wav_) {
 	this.pingTransformTexture.type = FloatType;
 	this.pongTransformTexture = new StorageTexture(this.Res,this.Res);
 	this.pongTransformTexture.type = FloatType;
+	// Disp + norm maps are the only Ocean4 textures SAMPLED with linear/mipmap
+	// filtering by the water material. WebGPU only allows linear filtering of
+	// float textures with the `float32-filterable` feature, which Safari's
+	// WebGPU does not expose — so on iOS a 32-bit float map silently fell back
+	// to nearest sampling, rendering the ocean as giant blocks. rgba16float
+	// (HalfFloatType) is core-filterable everywhere; half-float precision is
+	// ample for wave displacement and normals. (Storage format below must
+	// match: w_disp / w_norm declared rgba16float.)
 	this.dispMapTexture = new StorageTexture(this.Res,this.Res);
-	this.dispMapTexture.type = FloatType;
+	this.dispMapTexture.type = HalfFloatType;
 	this.normMapTexture = new StorageTexture(this.Res,this.Res);
-	this.normMapTexture.type = FloatType;
+	this.normMapTexture.type = HalfFloatType;
 	//- Adjustments - Filter
 	this.initSpectrumTexture.magFilter = this.initSpectrumTexture.minFilter = NearestFilter;
 	this.pingPhaseTexture.magFilter = this.pingPhaseTexture.minFilter = NearestFilter;
@@ -425,7 +434,7 @@ constructor(renderer,wav_) {
 		fn computeWGSL(
 			u_tsiz: f32,
 			r_ping: texture_2d<f32>,
-			w_disp: texture_storage_2d<rgba32float, write>,
+			w_disp: texture_storage_2d<rgba16float, write>,
 			u_indx: u32,
 		) -> void {
 			// Compute vUv (special)
@@ -452,7 +461,7 @@ constructor(renderer,wav_) {
 		fn computeWGSL(
 			u_tsiz: f32,
 			r_disp: texture_2d<f32>,
-			w_norm: texture_storage_2d<rgba32float, write>,
+			w_norm: texture_storage_2d<rgba16float, write>,
 			u_indx: u32,
 			u_gsiz: f32
 		) -> void {
