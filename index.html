@@ -922,5 +922,16 @@
   </script>
 
   <script type="module" src="/src/main.js"></script>
+
+  <!-- Register the offline service worker (built only in production; the
+       request 404s harmlessly in `vite dev`). Relative path resolves to the
+       app's base scope (/birdybird/). -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () {});
+      });
+    }
+  </script>
 </body>
 </html>
