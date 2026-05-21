@@ -45,14 +45,16 @@ export async function buildWorld(scene, renderer) {
   // Fog color from scene
   const fogColor = scene.fog ? scene.fog.color : new THREE.Color(0xb0d0e8);
 
-  // --- Load 4 terrain textures (Poly Haven, CC0) ---
+  // --- Load 6 terrain textures (Poly Haven, CC0) ---
+  // Bundled locally under public/textures/ground/ so they precache for offline
+  // and load same-origin (no third-party CDN round-trip on first paint).
   const textures = {
-    sandTex: loadTex('https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sandy_gravel/sandy_gravel_diff_1k.jpg'),
-    grassTex: loadTex('https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/leafy_grass/leafy_grass_diff_1k.jpg'),
-    rockTex: loadTex('https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_boulder_cracked/rock_boulder_cracked_diff_1k.jpg'),
-    snowTex: loadTex('https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/snow_field_aerial/snow_field_aerial_col_1k.jpg'),
-    forestTex: loadTex('https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_04/forest_ground_04_diff_1k.jpg'),
-    gravelTex: loadTex('https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/gravel_floor/gravel_floor_diff_1k.jpg'),
+    sandTex: loadTex('textures/ground/sandy_gravel_diff_1k.jpg'),
+    grassTex: loadTex('textures/ground/leafy_grass_diff_1k.jpg'),
+    rockTex: loadTex('textures/ground/rock_boulder_cracked_diff_1k.jpg'),
+    snowTex: loadTex('textures/ground/snow_field_aerial_col_1k.jpg'),
+    forestTex: loadTex('textures/ground/forest_ground_04_diff_1k.jpg'),
+    gravelTex: loadTex('textures/ground/gravel_floor_diff_1k.jpg'),
   };
 
   // --- Terrain material (custom shader with height-based blending) ---

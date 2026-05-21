@@ -41,10 +41,11 @@ function loadBuildingTextures() {
     return t;
   }
 
+  // Bundled locally (Poly Haven, CC0) — see public/textures/ground/.
   return {
-    brickTex: tex('https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brick_wall_006/brick_wall_006_diff_1k.jpg'),
-    concreteTex: tex('https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_008/concrete_wall_008_diff_1k.jpg'),
-    roofTex: tex('https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/roof_tiles/roof_tiles_diff_1k.jpg'),
+    brickTex: tex('textures/ground/brick_wall_006_diff_1k.jpg'),
+    concreteTex: tex('textures/ground/concrete_wall_008_diff_1k.jpg'),
+    roofTex: tex('textures/ground/roof_tiles_diff_1k.jpg'),
   };
 }
 
